@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Nevin AI - 首页设计稿 v3（含删除交互）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Noto Sans SC","PingFang SC",sans-serif;background:#f2f3f5;color:#1d1d1f;display:flex;justify-content:center;min-height:100vh}
+.phone-wrapper{padding:40px 0}
+.phone{width:390px;background:#fff;border-radius:44px;overflow:hidden;position:relative}
+.phone-notch{width:160px;height:30px;background:#1d1d1f;border-radius:0 0 20px 20px;margin:0 auto}
+.status-bar{display:flex;justify-content:space-between;padding:14px 24px 8px;font-size:12px;font-weight:600;color:#1d1d1f}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 20px 4px}
+.top-bar h1{font-size:28px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,#1d1d1f 0%,#555 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.top-bar .actions{display:flex;gap:16px;align-items:center}
+.top-bar .actions svg{width:22px;height:22px;color:#666;cursor:pointer}
+.top-bar .avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5e5ce6,#00d4aa);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+
+/* 导师过滤器 */
+.mentor-filter{display:flex;gap:8px;padding:8px 20px 12px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.mentor-filter::-webkit-scrollbar{display:none}
+.filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;border:none;flex-shrink:0}
+.filter-chip.active{background:#1d1d1f;color:#fff}
+.filter-chip.default{background:#f2f3f5;color:#555}
+.filter-chip:not(.active):hover{background:#e8e8ed}
+
+/* 对话列表 */
+.conversation-list{padding:0 20px 100px}
+.section-header{display:flex;justify-content:space-between;align-items:center;padding:6px 0 8px}
+.section-header span{font-size:13px;font-weight:600;color:#8e8e93}
+
+/* 对话卡片容器 - 支持左滑 */
+.conv-wrapper{position:relative;overflow:hidden;border-radius:16px;margin-bottom:2px}
+.delete-bg{position:absolute;top:0;right:0;bottom:0;width:90px;background:#ff3b30;display:flex;align-items:center;justify-content:center;border-radius:0 16px 16px 0;opacity:0;transition:opacity .3s}
+.delete-bg.show{opacity:1}
+.delete-btn{color:#fff;font-size:14px;font-weight:600;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+.delete-btn svg{width:22px;height:22px}
+
+.conv-item{display:flex;gap:14px;padding:14px 16px;cursor:pointer;transition:transform .3s,background .15s;position:relative;z-index:1;background:#fff;border-radius:16px}
+.conv-item.slid{transform:translateX(-90px)}
+.conv-item:not(:last-child){margin-bottom:0}
+
+/* 导师徽标 */
+.mentor-badge{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.mentor-badge.life{background:linear-gradient(135deg,#667eea,#764ba2)}
+.mentor-badge.work{background:linear-gradient(135deg,#f093fb,#f5576c)}
+.mentor-badge.love{background:linear-gradient(135deg,#ff9a9e,#fad0c4)}
+.mentor-badge.family{background:linear-gradient(135deg,#a8edea,#fed6e3)}
+.mentor-badge.photo{background:linear-gradient(135deg,#ffecd2,#fcb69f)}
+.mentor-badge.growth{background:linear-gradient(135deg,#89f7fe,#66a6ff)}
+
+.conv-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.conv-top{display:flex;justify-content:space-between;align-items:center}
+.conv-title{font-size:15px;font-weight:600;color:#1d1d1f}
+.conv-time{font-size:11px;color:#aeaeb2;flex-shrink:0;margin-left:8px}
+.conv-meta{display:flex;align-items:center;gap:6px}
+.conv-mentor-tag{font-size:10px;color:#8e8e93;background:#f2f3f5;padding:1px 6px;border-radius:4px;font-weight:500}
+.conv-persons{font-size:11px;color:#aeaeb2;display:flex;gap:4px;align-items:center}
+.conv-preview{font-size:13px;color:#8e8e93;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+
+/* 遮罩 + 确认弹窗 */
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:20;justify-content:center;align-items:center}
+.overlay.show{display:flex}
+.dialog{background:#fff;width:300px;border-radius:16px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.dialog h3{font-size:17px;font-weight:700;margin-bottom:8px;color:#1d1d1f}
+.dialog p{font-size:13px;color:#8e8e93;line-height:1.5;margin-bottom:4px}
+.dialog .check-list{margin:12px 0 20px}
+.dialog .check-item{font-size:13px;color:#555;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.dialog .check-item svg{width:14px;height:14px;color:#34c759;flex-shrink:0}
+.dialog-btns{display:flex;gap:10px}
+.dialog-btns button{flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:600;border:none;cursor:pointer;transition:opacity .2s}
+.dialog-btns .cancel{background:#f2f3f5;color:#1d1d1f}
+.dialog-btns .delete{background:#ff3b30;color:#fff}
+.dialog-btns button:active{opacity:.7}
+
+/* Toast */
+.toast{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);backdrop-filter:blur(10px);color:#fff;padding:14px 20px;border-radius:12px;font-size:13px;z-index:30;align-items:center;gap:12px;white-space:nowrap;max-width:90%}
+.toast.show{display:flex}
+.toast .undo-btn{color:#007aff;font-weight:600;font-size:13px;cursor:pointer;border:none;background:none;padding:0}
+.toast .icon-wrap{width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* Fab */
+.fab{position:fixed;bottom:90px;right:34px;width:56px;height:56px;border-radius:50%;background:#1d1d1f;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:transform .2s;border:none;font-size:28px;font-weight:300;line-height:1;z-index:10}
+.fab:hover{transform:scale(1.05)}
+
+/* 导师选择面板 */
+.mentor-picker{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,.12);padding:16px 20px 30px;z-index:15;animation:slideUp .3s ease}
+.mentor-picker.show{display:block}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.picker-title{font-size:16px;font-weight:600;margin-bottom:14px;color:#1d1d1f}
+.picker-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.picker-item{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px solid #f0f0f0;cursor:pointer;transition:all .15s}
+.picker-item:hover{border-color:#1d1d1f;background:#f8f8fa}
+.picker-item .icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.picker-item .info{flex:1}
+.picker-item .name{font-size:13px;font-weight:600;color:#1d1d1f}
+.picker-item .desc{font-size:11px;color:#8e8e93;margin-top:1px}
+.picker-item .default-badge{font-size:9px;color:#fff;background:#007aff;padding:1px 5px;border-radius:3px;margin-left:4px}
+.bottom-space{height:40px}
+
+/* 标注区 */
+.annotations{margin:20px 0 40px;padding:24px;background:#f8f9fb;border-radius:20px}
+.annotations h3{font-size:14px;font-weight:600;margin-bottom:12px;color:#1d1d1f}
+.annotation-item{display:flex;gap:10px;margin-bottom:10px;font-size:13px;color:#555;line-height:1.5}
+.annotation-item .num{width:20px;height:20px;border-radius:50%;background:#007aff;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.annotation-item .text{flex:1}
+.annotation-item .text strong{color:#1d1d1f}
+</style>
+</head>
+<body>
+<div class="phone-wrapper">
+<div class="phone">
+<div class="phone-notch"></div>
+
+<div class="status-bar">
+<span class="time">9:41</span>
+<div class="status-icons">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 9l4 4 4-4"/><path d="M1 15l4 4 4-4"/></svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+</div>
+</div>
+
+<div class="top-bar">
+<h1>Nevin</h1>
+<div class="actions">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<div class="avatar">N</div>
+</div>
+</div>
+
+<!-- 导师过滤器 -->
+<div class="mentor-filter">
+<button class="filter-chip active">全部</button>
+<button class="filter-chip default">⭐ 总管家</button>
+<button class="filter-chip default">💼 职场军师</button>
+<button class="filter-chip default">❤️ 情场顾问</button>
+<button class="filter-chip default" onclick="filterLove()">👨‍👩‍👧 家庭调解师</button>
+<button class="filter-chip default">📷 摄影导师</button>
+<button class="filter-chip default">🌱 成长教练</button>
+</div>
+
+<!-- 对话列表 -->
+<div class="conversation-list">
+<div class="section-header">
+<span>最近对话</span>
+</div>
+
+<div class="conv-wrapper">
+<div class="delete-bg" id="delBg1">
+<button class="delete-btn" onclick="showDialog()">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+删除
+</button>
+</div>
+<div class="conv-item" id="conv1" onclick="slideConv('conv1','delBg1')">
+<div class="mentor-badge love">❤️</div>
+<div class="conv-info">
+<div class="conv-top">
+<span class="conv-title">小红的暧昧期分析</span>
+<span class="conv-time">今天 10:23</span>
+</div>
+<div class="conv-meta">
+<span class="conv-mentor-tag">情场顾问</span>
+<span class="conv-persons">👤 小红</span>
+</div>
+<div class="conv-preview">她这次发了个"嗯"比平时慢了5分钟，考虑到她的性格..</div>
+</div>
+</div>
+</div>
+
+<div class="conv-wrapper">
+<div class="delete-bg" id="delBg2">
+<button class="delete-btn" onclick="showDialog()">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+删除
+</button>
+</div>
+<div class="conv-item" id="conv2" onclick="slideConv('conv2','delBg2')">
+<div class="mentor-badge work">💼</div>
+<div class="conv-info">
+<div class="conv-top">
+<span class="conv-title">跟张总的1on1策略</span>
+<span class="conv-time">昨天 16:45</span>
+</div>
+<div class="conv-meta">
+<span class="conv-mentor-tag">职场军师</span>
+<span class="conv-persons">👤 张总</span>
+</div>
+<div class="conv-preview">张总话里话外透露出对你的期望很高…</div>
+</div>
+</div>
+</div>
+
+<div class="conv-wrapper">
+<div class="delete-bg" id="delBg3">
+<button class="delete-btn" onclick="showDialog()">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+删除
+</button>
+</div>
+<div class="conv-item" id="conv3" onclick="slideConv('conv3','delBg3')">
+<div class="mentor-badge life">🧠</div>
+<div class="conv-info">
+<div class="conv-top">
+<span class="conv-title">下半年职业规划</span>
+<span class="conv-time">昨天 14:30</span>
+</div>
+<div class="conv-meta">
+<span class="conv-mentor-tag">总管家</span>
+</div>
+<div class="conv-preview">结合你当前的技能栈和行业趋势，下半年建议聚焦..</div>
+</div>
+</div>
+</div>
+
+</div>
+
+<button class="fab" onclick="document.querySelector('.mentor-picker').classList.toggle('show')">+</button>
+
+<!-- 导师选择面板 -->
+<div class="mentor-picker">
+<div class="picker-title">选择导师</div>
+<div class="picker-list">
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#667eea,#764ba2)">🧠</div>
+<div class="info">
+<div class="name">总管家 <span class="default-badge">默认</span></div>
+<div class="desc">统筹全局·你的人生CEO</div>
+</div>
+</div>
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#f093fb,#f5576c)">💼</div>
+<div class="info">
+<div class="name">职场军师</div>
+<div class="desc">一针见血·懂潜规则有策略</div>
+</div>
+</div>
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#ff9a9e,#fad0c4)">❤️</div>
+<div class="info">
+<div class="name">情场顾问</div>
+<div class="desc">洞察人心·你的情感参谋</div>
+</div>
+</div>
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#a8edea,#fed6e3)">👨‍👩‍👧</div>
+<div class="info">
+<div class="name">家庭调解师</div>
+<div class="desc">温和共情·善于化解矛盾</div>
+</div>
+</div>
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#ffecd2,#fcb69f)">📷</div>
+<div class="info">
+<div class="name">摄影导师</div>
+<div class="desc">审美在线·专业摄影指导</div>
+</div>
+</div>
+<div class="picker-item" onclick="document.querySelector('.mentor-picker').classList.remove('show')">
+<div class="icon" style="background:linear-gradient(135deg,#89f7fe,#66a6ff)">🌱</div>
+<div class="info">
+<div class="name">成长教练</div>
+<div class="desc">理性结构化·目标导向</div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="overlay" id="dialogOverlay">
+<div class="dialog">
+<h3>删除此对话？</h3>
+<p>对话记录将被删除。联系人信息和 AI 长期记忆不受影响。</p>
+<div class="check-list">
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> 联系人信息不受影响</div>
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> AI 记忆不受影响</div>
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> 下次聊同一话题自动衔接</div>
+</div>
+<div class="dialog-btns">
+<button class="cancel" onclick="closeDialog()">取消</button>
+<button class="delete" onclick="confirmDelete()">删除</button>
+</div>
+</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+<span class="icon-wrap">
+<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" width="12" height="12"><path d="M20 6L9 17l-5-5"/></svg>
+</span>
+<span>对话已删除，联系人信息和 AI 记忆不受影响</span>
+<button class="undo-btn" onclick="undoDelete()">撤销</button>
+</div>
+
+</div>
+
+<!-- 标注区 -->
+<div class="annotations">
+<h3>📐 首页设计稿 v3 — 新增删除交互</h3>
+
+<div class="annotation-item">
+<span class="num">1</span>
+<div class="text"><strong>左滑删除</strong> — 对话行左滑露出红色删除按钮，需要完整滑动动作，非轻触。</div>
+</div>
+
+<div class="annotation-item">
+<span class="num">2</span>
+<div class="text"><strong>确认弹窗</strong> — 点击删除后弹出，明确告知联系人信息和 AI 记忆不受影响。</div>
+</div>
+
+<div class="annotation-item">
+<span class="num">3</span>
+<div class="text"><strong>可撤销</strong> — 删除后底部 toast 显示 3 秒窗口，点击「撤销」恢复。</div>
+</div>
+
+<div class="annotation-item">
+<span class="num">4</span>
+<div class="text"><strong>记忆独立</strong> — memories / persons 表不受对话删除影响。再次开聊时导师通过记忆检索自动衔接历史。</div>
+</div>
+
+</div>
+
+</div>
+
+<script>
+let currentSlid = null;
+function slideConv(id, bgId) {
+  const el = document.getElementById(id);
+  const bg = document.getElementById(bgId);
+  if (currentSlid === id) {
+    el.classList.remove('slid');
+    bg.classList.remove('show');
+    currentSlid = null;
+  } else {
+    if (currentSlid) {
+      const prev = document.getElementById(currentSlid);
+      if (prev) prev.classList.remove('slid');
+      document.querySelectorAll('.delete-bg').forEach(b => b.classList.remove('show'));
+    }
+    el.classList.add('slid');
+    bg.classList.add('show');
+    currentSlid = id;
+  }
+}
+function showDialog() {
+  document.getElementById('dialogOverlay').classList.add('show');
+}
+function closeDialog() {
+  document.getElementById('dialogOverlay').classList.remove('show');
+}
+function confirmDelete() {
+  closeDialog();
+  // Reset slid state
+  if (currentSlid) {
+    const el = document.getElementById(currentSlid);
+    if (el) { el.classList.remove('slid'); el.style.display = 'none'; }
+    currentSlid = null;
+  }
+  document.querySelectorAll('.delete-bg').forEach(b => b.classList.remove('show'));
+  const toast = document.getElementById('toast');
+  toast.classList.add('show');
+  // Auto hide after 3s
+  if (window.undoTimer) clearTimeout(window.undoTimer);
+  window.undoTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+function undoDelete() {
+  const toast = document.getElementById('toast');
+  toast.classList.remove('show');
+  if (window.undoTimer) clearTimeout(window.undoTimer);
+  // Restore the conversation that was hidden
+  document.querySelectorAll('.conv-item').forEach(el => el.style.display = '');
+}
+</script>
+</body>
+</html>

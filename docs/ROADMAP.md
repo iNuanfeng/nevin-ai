@@ -1,0 +1,227 @@
+# Nevin AI 研发路线图
+
+> 版本：v0.1（MVP）
+> 最后更新：2026-06-06
+> 对应：PRD v0.1 · ARCHITECTURE v0.1
+
+---
+
+## 开发原则
+
+- **垂直切片优先**：每个 Phase 内部按"后端 → API → 前端"的顺序交付完整可用的功能，不做跨 Phase 的横向基建
+- **可演示节点**：每个 Phase 结束时有可运行的界面，不等到全部做完才看效果
+- **P0 先行**：导师系统、对话、流式回答、记忆注入是核心闭环，P1（图片、备份）放在最后
+
+---
+
+## Phase 0 — 项目脚手架（0.5 天）
+
+**目标**：搭好工程骨架，数据库初始化，能启动开发服务器
+
+| 步骤 | 内容 | 产出 |
+|------|------|------|
+| 0.1 | `npm create next-app`，配置 TypeScript + Tailwind + App Router | 项目目录 |
+| 0.2 | 安装依赖：`better-sqlite3` · `react-markdown` · `lucide-react` 等 | package.json |
+| 0.3 | 创建 `lib/db.ts` + `lib/schema.sql`，初始化 SQLite 数据库 | `data/nevin.db` |
+| 0.4 | 创建目录结构（`app/` · `components/` · `lib/` · `app/api/` · `data/`） | 目录骨架 |
+| 0.5 | 实现全局布局 `app/layout.tsx`，含 PWA manifest link + viewport meta | 基础壳子 |
+| 0.6 | 初始化 6 个预置导师的数据（seeding mentors 表） | 导师就绪 |
+
+**验证**：`npm run dev` 后浏览器打开能看到空白布局，SQLite 文件生成且 mentors 表有 6 行数据
+
+---
+
+## Phase 1 — 后端核心服务（1.5 天）
+
+**目标**：完成所有 P0 服务的业务逻辑，不涉及前端 UI
+
+### 1.1 数据层完善
+
+| 步骤 | 内容 |
+|------|------|
+| 1.1.1 | 实现所有表（conversations / messages / persons / conversation_persons / memories / events）的 CRUD 封装 |
+| 1.1.2 | 实现 FTS5 全文索引的建表和查询封装 |
+| 1.1.3 | 实现 memories 按重要度 + BM25 混合排序的检索逻辑 |
+
+### 1.2 服务层
+
+| 步骤 | 内容 |
+|------|------|
+| 1.2.1 | `lib/mentor-service.ts` — 导师列表、按 ID 查询、更新 style_config |
+| 1.2.2 | `lib/person-service.ts` — 联系人 CRUD + 对话中关联/解除关联 |
+| 1.2.3 | `lib/profile-service.ts` — 单行用户档案的读取和更新 |
+| 1.2.4 | `lib/memory-service.ts` — 记忆检索（FTS5 + 重要度）、记忆存储、异步提炼 |
+| 1.2.5 | `lib/deepseek.ts` — DeepSeek API 客户端（流式 SSE + 非流式分析） |
+
+### 1.3 聊天核心
+
+| 步骤 | 内容 |
+|------|------|
+| 1.3.1 | `lib/chat-service.ts` — 完整的 handleMessage 流程：profile 全量 + mentor 配置 + 联系人档案 + 记忆检索 Top-10 + 近 N 条上下文 → 组装 system prompt → 调用 DeepSeek 流式 → SSE 返回 |
+| 1.3.2 | 实现异步后处理：记忆提炼、联系人档案丰富、profile 更新 |
+
+### 1.4 API Routes
+
+| 步骤 | 内容 |
+|------|------|
+| 1.4.1 | `POST /api/chat` — SSE 流式对话 |
+| 1.4.2 | `GET/POST /api/conversations` — 列表（含 mentor 筛选）+ 新建 |
+| 1.4.3 | `GET/PUT /api/mentors` — 导师列表 + 人设更新 |
+| 1.4.4 | `GET/POST/PUT/DELETE /api/persons` — 联系人全量 CRUD |
+| 1.4.5 | `GET/POST/DELETE /api/conversation-persons` — 对话-联系人关联管理 |
+| 1.4.6 | `GET/POST /api/memory` — 记忆检索 + 手动添加 |
+| 1.4.7 | `GET/PUT /api/profile` — 用户档案 |
+
+**验证**：用 curl/hoppscotch 测试每个 API 的请求和响应，SSE 端到端能收到流式 token
+
+---
+
+## Phase 2 — 前端核心页面（2 天）
+
+**目标**：所有 P0 页面的 UI + 联调，移动端可用
+
+### 2.1 首页（对话列表）
+
+| 步骤 | 内容 |
+|------|------|
+| 2.1.1 | 顶栏（应用名 + 搜索 icon + 头像入口） |
+| 2.1.2 | 导师过滤器（横向滚动 chip、「全部」默认选中、总管家 ⭐ 标识） |
+| 2.1.3 | 对话列表（每条对话：导师图标 + 标题 + 时间 + 导师标签 + 联系人标注 + 摘要） |
+| 2.1.4 | 左滑删除交互（露出红色按钮 → 确认弹窗 → toast + 3s 撤销） |
+| 2.1.5 | FAB 新建按钮 → 导师选择面板（底部弹出） |
+| 2.1.6 | 按导师筛选对话（前端筛选或 API mentorId 参数） |
+
+### 2.2 聊天页
+
+| 步骤 | 内容 |
+|------|------|
+| 2.2.1 | 聊天头部（导师头像 + 名称/描述 + 添加联系人按钮 + 更多菜单） |
+| 2.2.2 | 联系人标签栏（已添加的联系人以 tag 展示，可移除） |
+| 2.2.3 | 消息气泡（用户/助手的样式差异）+ 打字机流式渲染 |
+| 2.2.4 | 输入区（多行 textarea + 发送按钮 + 附件按钮） |
+| 2.2.5 | SSE 接流、逐块更新、done 事件处理 |
+| 2.2.6 | 联系人选择面板（底部 sheet，勾选 → 确认加入对话） |
+| 2.2.7 | Markdown 渲染（react-markdown） |
+
+### 2.3 通讯录页
+
+| 步骤 | 内容 |
+|------|------|
+| 2.3.1 | 联系人列表（头像首字 + 姓名 + 关系标签 + 分类色标） |
+| 2.3.2 | 搜索框（前端搜索或 API 检索） |
+| 2.3.3 | 新建联系人（底部 sheet 表单或跳转编辑页） |
+| 2.3.4 | 编辑/删除联系人 |
+
+### 2.4 个人档案
+
+| 步骤 | 内容 |
+|------|------|
+| 2.4.1 | 表单（名字 / 背景 / 价值观 / 性格 / 目标 / 生活习惯） |
+| 2.4.2 | 保存 → PUT /api/profile |
+| 2.4.3 | 从后端读现有数据回填 |
+
+### 2.5 导师人设管理
+
+| 步骤 | 内容 |
+|------|------|
+| 2.5.1 | 导师列表（各导师 icon + 名称 + 当前风格描述） |
+| 2.5.2 | 人设编辑器（点击展开 textarea，输入风格描述 → 保存 → 更新 PUT /api/mentors） |
+
+### 2.6 底部导航
+
+| 步骤 | 内容 |
+|------|------|
+| 2.6.1 | 实现 5 个 tab（首页 / 通讯录 / 档案 / 导师 / 备份）的切换 |
+| 2.6.2 | 活跃 tab 高亮 + 页面切换动画 |
+
+### 2.7 响应式 & PWA
+
+| 步骤 | 内容 |
+|------|------|
+| 2.7.1 | 移动端适配（375px - 430px 宽度） |
+| 2.7.2 | PWA manifest + service worker（纯静态缓存） |
+| 2.7.3 | iOS Safari 和 Android Chrome 兼容性检查 |
+
+**验证**：完整跑通"首页 → 新建对话 → 选导师 → 聊天 → 流式回复 → 添加联系人"闭环
+
+---
+
+## Phase 3 — P1 功能 + 增强（1 天）
+
+**目标**：MVP 剩余功能和体验打磨
+
+| 步骤 | 内容 | 优先级 |
+|------|------|--------|
+| 3.1 | 图片上传 `POST /api/upload` + `ImageUploader` 组件 | P1 |
+| 3.2 | DeepSeek VL 多模态调用（发送图片时切换 content 格式） | P1 |
+| 3.3 | 异步联系人档案丰富（`PersonService.enrichProfile` 在对话结束后触发） | P1 |
+| 3.4 | 异步记忆提炼（对话结束后触发 memory 提炼写入） | P0 |
+| 3.5 | 对话标题自动生成（触发时机：首轮 AI 回复后） | P1 |
+| 3.6 | 搜索功能（前端搜索对话/联系人） | P1 |
+| 3.7 | 备份页面 + `GET /api/backup` ZIP 打包下载 | P1 |
+| 3.8 | 空状态处理（无对话、无联系人时的引导文案） | P1 |
+| 3.9 | 加载状态 & 错误边界（骨架屏、错误重试） | P1 |
+| 3.10 | Swipe-to-go-back 手势（聊天页返回首页） | P1 |
+
+**验证**：上传图片 → AI 分析 → 对话结束后自动更新联系人档案 → 备份下载
+
+---
+
+## Phase 4 — 部署 & 打磨（0.5 天）
+
+**目标**：可部署、可用、可维护
+
+| 步骤 | 内容 |
+|------|------|
+| 4.1 | `npm run build` 通过，检查生产构建无误 |
+| 4.2 | Nginx 反代配置（SSE buffering off） |
+| 4.3 | PM2 启动脚本 `ecosystem.config.js` |
+| 4.4 | 环境变量文档 `.env.example` |
+| 4.5 | 备份脚本 `scripts/backup.sh` + 恢复脚本 `scripts/restore.sh` |
+| 4.6 | 错误日志和异常监控兜底 |
+
+**验证**：生产环境部署后从手机浏览器/PWA 打开，完整走一遍核心流程
+
+---
+
+## 里程碑总览
+
+```
+Phase 0 ──→ Phase 1 ──→ Phase 2 ──→ Phase 3 ──→ Phase 4
+ 0.5d        1.5d         2d           1d          0.5d
+ 脚手架      后端服务     前端页面     P1 功能     部署打磨
+        ↘         ↘           ↘          ↘
+      可运行骨架    API 可调     核心闭环    完整 MVP    可部署
+```
+
+**预计总工期**: ~5.5 天（全时投入）
+
+---
+
+## 依赖关系
+
+```
+Phase 0 ──────────────── 任何工作开始前需要
+    │
+    ├──→ Phase 1 ── 后端是所有前端页面的依赖
+    │                 │
+    │                 ├──→ Phase 2.1（首页列表）需要 conversations + mentors API
+    │                 ├──→ Phase 2.2（聊天）需要 chat API + conversations API
+    │                 ├──→ Phase 2.3（通讯录）需要 persons API
+    │                 ├──→ Phase 2.4（档案）需要 profile API
+    │                 └──→ Phase 2.5（导师人设）需要 mentors API
+    │
+    ├──→ Phase 3 ── 依赖 Phase 1 API + Phase 2 页面框架
+    │
+    └──→ Phase 4 ── 依赖 Phase 0-3 全部完成
+```
+
+---
+
+## 技术债务 & 注意事项
+
+- **长连接管理**：SSE 需要处理断线重连、心跳、超时，Phase 2 联调时注意
+- **异步后处理**：记忆提炼和联系人档案更新在 SSE done 后触发，注意不要阻塞主流程
+- **SQLite 并发**：Next.js 在开发模式下会 hot reload，better-sqlite3 是同步 API，注意连接管理
+- **图片存储**：MVP 阶段 base64 内联或存本地 `public/uploads/`，后续可考虑对象存储
+- **隐私**：DEEPSEEK_API_KEY 不要提交到 git，加 `.env.local` 到 `.gitignore`

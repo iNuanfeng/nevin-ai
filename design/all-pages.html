@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Nevin AI - 全页面设计稿</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Noto Sans SC","PingFang SC",sans-serif;background:#f2f3f5;color:#1d1d1f;display:flex;justify-content:center;min-height:100vh;padding:20px 0}
+.phone{width:390px;background:#fff;border-radius:44px;overflow:hidden;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.12)}
+.phone-notch{width:160px;height:28px;background:#1d1d1f;border-radius:0 0 20px 20px;margin:0 auto}
+.status-bar{display:flex;justify-content:space-between;padding:10px 24px 6px;font-size:12px;font-weight:600;color:#1d1d1f}
+.page{display:none;min-height:700px;flex-direction:column}
+.page.active{display:flex}
+.page-content{flex:1;overflow-y:auto}
+
+/* ==================== 通用组件 ==================== */
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 20px 4px}
+.top-bar h1{font-size:26px;font-weight:700;letter-spacing:-.5px;background:linear-gradient(135deg,#1d1d1f 0%,#555 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.top-bar .left-btn{font-size:14px;color:#007aff;cursor:pointer;border:none;background:none;font-weight:500;padding:4px 0}
+.top-bar .right-actions{display:flex;gap:14px;align-items:center}
+.top-bar .right-actions svg{width:20px;height:20px;color:#666;cursor:pointer}
+.top-bar .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#5e5ce6,#00d4aa);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+
+/* 导师过滤器 */
+.mentor-filter{display:flex;gap:6px;padding:4px 20px 10px;overflow-x:auto;scrollbar-width:none}
+.mentor-filter::-webkit-scrollbar{display:none}
+.filter-chip{white-space:nowrap;padding:5px 12px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;border:none;flex-shrink:0}
+.filter-chip.active{background:#1d1d1f;color:#fff}
+.filter-chip.default{background:#f2f3f5;color:#555}
+
+/* 对话卡片 */
+.conv-item{display:flex;gap:12px;padding:12px 20px;cursor:pointer;transition:background .15s}
+.conv-item:active{background:#f2f3f5}
+.conv-item:not(:last-child){border-bottom:1px solid #f0f0f0}
+.mentor-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.mentor-icon.life{background:linear-gradient(135deg,#667eea,#764ba2)}
+.mentor-icon.work{background:linear-gradient(135deg,#f093fb,#f5576c)}
+.mentor-icon.love{background:linear-gradient(135deg,#ff9a9e,#fad0c4)}
+.mentor-icon.family{background:linear-gradient(135deg,#a8edea,#fed6e3)}
+.mentor-icon.photo{background:linear-gradient(135deg,#ffecd2,#fcb69f)}
+.mentor-icon.growth{background:linear-gradient(135deg,#89f7fe,#66a6ff)}
+.conv-body{flex:1;min-width:0}
+.conv-top{display:flex;justify-content:space-between;align-items:center}
+.conv-title{font-size:15px;font-weight:600;color:#1d1d1f}
+.conv-time{font-size:11px;color:#aeaeb2;flex-shrink:0;margin-left:6px}
+.conv-tags{display:flex;align-items:center;gap:4px;margin-top:1px}
+.conv-tag{font-size:10px;color:#8e8e93;background:#f2f3f5;padding:1px 6px;border-radius:4px;font-weight:500}
+.conv-person{font-size:11px;color:#aeaeb2}
+.conv-preview{font-size:13px;color:#8e8e93;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+
+/* FAB */
+.fab{position:absolute;bottom:80px;right:24px;width:52px;height:52px;border-radius:50%;background:#1d1d1f;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:transform .2s;border:none;font-size:26px;font-weight:300;z-index:5}
+.fab:active{transform:scale(.92)}
+
+/* 底部导航 */
+.bottom-nav{display:flex;justify-content:space-around;align-items:center;padding:6px 0 16px;border-top:1px solid #f0f0f0;background:#fff;flex-shrink:0}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer;padding:4px 10px;border:none;background:none;transition:background .15s;border-radius:8px}
+.nav-item svg{width:22px;height:22px;color:#8e8e93}
+.nav-item.active svg{color:#007aff}
+.nav-item span{font-size:10px;color:#8e8e93;font-weight:500}
+.nav-item.active span{color:#007aff}
+
+/* 遮罩 + 弹窗通用 */
+.overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:20;justify-content:center;align-items:center}
+.overlay.show{display:flex}
+.dialog{background:#fff;width:300px;border-radius:16px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2)}
+.dialog h3{font-size:17px;font-weight:700;margin-bottom:6px;color:#1d1d1f}
+.dialog p{font-size:13px;color:#8e8e93;line-height:1.5;margin-bottom:4px}
+.dialog .check-list{margin:10px 0 16px}
+.dialog .check-item{font-size:13px;color:#555;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.dialog .check-item svg{width:14px;height:14px;color:#34c759;flex-shrink:0}
+.dialog-btns{display:flex;gap:10px}
+.dialog-btns button{flex:1;padding:12px;border-radius:12px;font-size:15px;font-weight:600;border:none;cursor:pointer}
+.dialog-btns .cancel{background:#f2f3f5;color:#1d1d1f}
+.dialog-btns .delete{background:#ff3b30;color:#fff}
+.dialog-btns .primary{background:#007aff;color:#fff}
+
+/* Toast */
+.toast{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);backdrop-filter:blur(10px);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:30;align-items:center;gap:10px;white-space:nowrap;max-width:88%}
+.toast.show{display:flex}
+
+/* ==================== 页面1：首页 ==================== */
+#page-home .section-header{display:flex;justify-content:space-between;align-items:center;padding:4px 20px 2px}
+#page-home .section-header span{font-size:12px;font-weight:600;color:#8e8e93;text-transform:uppercase}
+
+/* ==================== 页面2：聊天页 ==================== */
+.chat-header{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid #f0f0f0;flex-shrink:0}
+.chat-header .back{font-size:22px;cursor:pointer;color:#333;border:none;background:none;padding:2px 4px}
+.chat-header .ch-avatar{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.chat-header .ch-info{flex:1;min-width:0}
+.chat-header .ch-name{font-size:15px;font-weight:600;color:#1d1d1f}
+.chat-header .ch-sub{font-size:11px;color:#8e8e93;margin-top:1px}
+.chat-header .ch-actions{display:flex;gap:12px}
+.chat-header .ch-actions svg{width:20px;height:20px;color:#666;cursor:pointer}
+
+.chat-messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;position:relative}
+.msg.user{background:#007aff;color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg.assistant{background:#f2f3f5;color:#1d1d1f;align-self:flex-start;border-bottom-left-radius:4px}
+.msg .msg-time{font-size:10px;color:rgba(0,0,0,.3);margin-top:4px;text-align:right}
+.msg.user .msg-time{color:rgba(255,255,255,.5)}
+.msg.assistant .msg-time{color:#aeaeb2}
+.msg .typing-dots{display:flex;gap:4px;padding:4px 0}
+.msg .typing-dots span{width:6px;height:6px;background:#8e8e93;border-radius:50%;animation:typing 1.4s infinite}
+.msg .typing-dots span:nth-child(2){animation-delay:.2s}
+.msg .typing-dots span:nth-child(3){animation-delay:.4s}
+@keyframes typing{0%,60%,100%{opacity:.3}30%{opacity:1}}
+
+.chat-input{display:flex;align-items:flex-end;gap:8px;padding:8px 12px 12px;border-top:1px solid #f0f0f0;flex-shrink:0;background:#fff}
+.chat-input .plus-btn{width:34px;height:34px;border-radius:50%;background:#f2f3f5;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;flex-shrink:0}
+.chat-input .plus-btn svg{width:18px;height:18px;color:#666}
+.chat-input textarea{flex:1;border:none;background:#f2f3f5;border-radius:20px;padding:9px 14px;font-size:14px;font-family:inherit;resize:none;outline:none;min-height:36px;max-height:100px}
+.chat-input .send-btn{width:36px;height:36px;border-radius:50%;background:#007aff;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;flex-shrink:0}
+.chat-input .send-btn svg{width:16px;height:16px}
+
+/* 聊天页 - 联系人标签 */
+.contact-tags{display:flex;gap:6px;padding:6px 16px 4px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;flex-shrink:0}
+.contact-tag{display:flex;align-items:center;gap:4px;padding:4px 10px 4px 8px;border-radius:16px;font-size:12px;font-weight:500;border:1px solid #e8e8ed;cursor:pointer}
+.contact-tag .remove{width:14px;height:14px;border-radius:50%;background:#e8e8ed;display:flex;align-items:center;justify-content:center;font-size:10px;color:#8e8e93;cursor:pointer;border:none}
+
+/* 联系人生成提示 */
+.contact-suggest{display:none;position:absolute;bottom:100%;left:16px;right:16px;background:#fff;border-radius:12px;box-shadow:0 -4px 20px rgba(0,0,0,.1);padding:14px;border:1px solid #f0f0f0;z-index:10}
+.contact-suggest.show{display:block}
+.contact-suggest .cs-title{font-size:13px;font-weight:600;margin-bottom:6px;color:#1d1d1f}
+.contact-suggest .cs-item{display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;border-bottom:1px solid #f5f5f5}
+.contact-suggest .cs-item:last-child{border:none}
+.contact-suggest .cs-item:active{opacity:.6}
+.contact-suggest .cs-avatar{width:28px;height:28px;border-radius:50%;background:#e8e8ed;display:flex;align-items:center;justify-content:center;font-size:12px}
+.contact-suggest .cs-name{font-size:13px;font-weight:500;color:#1d1d1f}
+.contact-suggest .cs-rel{font-size:11px;color:#8e8e93;margin-left:4px}
+.contact-suggest .cs-add{font-size:11px;color:#007aff;margin-left:auto;cursor:pointer}
+.contact-suggest .cs-add:active{opacity:.6}
+
+/* ==================== 页面3：通讯录 ==================== */
+.persons-search{margin:4px 20px 8px;position:relative}
+.persons-search input{width:100%;padding:8px 12px 8px 34px;border-radius:10px;border:none;background:#f2f3f5;font-size:14px;outline:none}
+.persons-search .ps-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:#aeaeb2}
+.persons-list{flex:1;overflow-y:auto}
+.person-item{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;border-bottom:1px solid #f5f5f5}
+.person-item:active{background:#f8f8fa}
+.person-avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;color:#fff;font-weight:600}
+.person-info{flex:1;min-width:0}
+.person-name{font-size:15px;font-weight:600;color:#1d1d1f}
+.person-meta{font-size:12px;color:#8e8e93;margin-top:1px;display:flex;gap:6px;align-items:center}
+.person-rel-badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500}
+.person-rel-badge.colleague{background:#e8f4ff;color:#007aff}
+.person-rel-badge.romance{background:#fff0f0;color:#ff3b30}
+.person-rel-badge.family{background:#f0fff4;color:#34c759}
+.person-rel-badge.friend{background:#fff8e8;color:#ff9500}
+.person-arrow{color:#c7c7cc;font-size:14px}
+
+/* ==================== 页面4：个人档案 ==================== */
+.profile-form{padding:8px 20px 20px}
+.form-group{margin-bottom:16px}
+.form-label{font-size:12px;font-weight:600;color:#8e8e93;text-transform:uppercase;margin-bottom:6px;letter-spacing:.3px}
+.form-input{width:100%;padding:10px 14px;border-radius:10px;border:1px solid #e8e8ed;font-size:14px;color:#1d1d1f;outline:none;font-family:inherit;background:#fff;transition:border .2s}
+.form-input:focus{border-color:#007aff}
+.form-textarea{width:100%;padding:10px 14px;border-radius:10px;border:1px solid #e8e8ed;font-size:14px;color:#1d1d1f;outline:none;font-family:inherit;background:#fff;resize:vertical;min-height:60px;transition:border .2s}
+.form-textarea:focus{border-color:#007aff}
+.form-hint{font-size:11px;color:#aeaeb2;margin-top:4px}
+.save-btn{width:100%;padding:12px;border-radius:12px;background:#007aff;color:#fff;font-size:15px;font-weight:600;border:none;cursor:pointer;margin-top:8px}
+.save-btn:active{opacity:.8}
+
+/* ==================== 页面5：导师人设管理 ==================== */
+.mentor-settings-list{padding:8px 0}
+.ms-item{display:flex;align-items:center;gap:12px;padding:14px 20px;cursor:pointer;border-bottom:1px solid #f5f5f5}
+.ms-item:active{background:#f8f8fa}
+.ms-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ms-info{flex:1;min-width:0}
+.ms-name{font-size:15px;font-weight:600;color:#1d1d1f}
+.ms-style{font-size:12px;color:#8e8e93;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-arrow{color:#c7c7cc}
+
+/* 人设编辑 */
+.style-editor{padding:12px 20px 20px;display:none}
+.style-editor.show{display:block}
+.style-editor .se-title{font-size:15px;font-weight:600;margin-bottom:8px}
+.style-editor .se-hint{font-size:12px;color:#8e8e93;margin-bottom:10px;line-height:1.5}
+.style-editor textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #e8e8ed;font-size:14px;font-family:inherit;resize:vertical;min-height:80px;outline:none}
+.style-editor textarea:focus{border-color:#007aff}
+
+/* ==================== 页面6：备份页 ==================== */
+.backup-page{padding:24px 20px;flex:1;display:flex;flex-direction:column}
+.backup-card{background:#f8f9fb;border-radius:16px;padding:20px;margin-bottom:20px}
+.backup-card h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.backup-card p{font-size:13px;color:#555;line-height:1.6}
+.backup-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.bstat{background:#fff;border-radius:12px;padding:14px;text-align:center}
+.bstat .num{font-size:20px;font-weight:700;color:#1d1d1f}
+.bstat .label{font-size:11px;color:#8e8e93;margin-top:2px}
+.download-btn{width:100%;padding:14px;border-radius:14px;background:#1d1d1f;color:#fff;font-size:16px;font-weight:600;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.download-btn:active{opacity:.8}
+.download-btn svg{width:20px;height:20px}
+
+/* ==================== 底部面板通用 ==================== */
+.bottom-sheet{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,.12);padding:16px 20px 30px;z-index:15;animation:slideUp .3s ease;max-height:70vh;overflow-y:auto}
+.bottom-sheet.show{display:block}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.bs-title{font-size:16px;font-weight:600;margin-bottom:14px;color:#1d1d1f}
+.bs-handle{width:36px;height:4px;border-radius:2px;background:#e8e8ed;margin:0 auto 12px}
+.bs-close{position:absolute;top:16px;right:16px;font-size:20px;color:#8e8e93;border:none;background:none;cursor:pointer;padding:4px}
+
+/* 导师选择面板 */
+.picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.picker-item{display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px solid #f0f0f0;cursor:pointer;transition:all .15s}
+.picker-item:hover{border-color:#1d1d1f}
+.picker-item .pi-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.picker-item .pi-info{flex:1}
+.picker-item .pi-name{font-size:13px;font-weight:600;color:#1d1d1f}
+.picker-item .pi-desc{font-size:11px;color:#8e8e93;margin-top:1px}
+.picker-item .default-badge{font-size:9px;color:#fff;background:#007aff;padding:1px 5px;border-radius:3px;margin-left:4px}
+
+/* 联系人选择 */
+.contact-pick-list{max-height:300px;overflow-y:auto}
+.cp-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f5f5f5;cursor:pointer}
+.cp-item:last-child{border:none}
+.cp-checkbox{width:20px;height:20px;border-radius:6px;border:2px solid #c7c7cc;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s}
+.cp-checkbox.checked{background:#007aff;border-color:#007aff}
+.cp-checkbox.checked::after{content:'✓';color:#fff;font-size:12px;font-weight:700}
+.cp-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;color:#fff;font-weight:600}
+.cp-info{flex:1}
+.cp-name{font-size:14px;font-weight:500;color:#1d1d1f}
+.cp-rel{font-size:11px;color:#8e8e93;margin-top:1px}
+.cp-done-btn{width:100%;padding:12px;border-radius:12px;background:#007aff;color:#fff;font-size:15px;font-weight:600;border:none;cursor:pointer;margin-top:12px}
+
+/* ==================== 标注区 ==================== */
+.annotations{margin:16px 0;padding:20px;background:#f8f9fb;border-radius:16px}
+.annotations h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#1d1d1f}
+.annotation-item{display:flex;gap:8px;margin-bottom:8px;font-size:12px;color:#555;line-height:1.5}
+.annotation-item .num{width:18px;height:18px;border-radius:50%;background:#007aff;color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.annotation-item .text{flex:1}
+.annotation-item .text strong{color:#1d1d1f}
+</style>
+</head>
+<body>
+
+<div class="phone" id="app">
+
+<div class="phone-notch"></div>
+<div class="status-bar"><span class="time">9:41</span><div class="status-icons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M1 9l4 4 4-4"/><path d="M1 15l4 4 4-4"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg></div></div>
+
+<!-- ==================== 页面1：首页 ==================== -->
+<div class="page active" id="page-home">
+<div class="top-bar">
+<h1>Nevin</h1>
+<div class="right-actions">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="showSearch()"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<div class="avatar" onclick="showPage('profile')">N</div>
+</div>
+</div>
+<div class="mentor-filter">
+<button class="filter-chip active">全部</button>
+<button class="filter-chip default">⭐ 总管家</button>
+<button class="filter-chip default">💼 职场军师</button>
+<button class="filter-chip default">❤️ 情场顾问</button>
+<button class="filter-chip default">👨‍👩‍👧 家庭调解师</button>
+<button class="filter-chip default">📷 摄影导师</button>
+<button class="filter-chip default">🌱 成长教练</button>
+</div>
+<div class="page-content">
+<div class="section-header"><span>最近对话</span></div>
+<div class="conv-item" onclick="showChat()">
+<div class="mentor-icon love">❤️</div>
+<div class="conv-body">
+<div class="conv-top"><span class="conv-title">小红的暧昧期分析</span><span class="conv-time">今天</span></div>
+<div class="conv-tags"><span class="conv-tag">情场顾问</span><span class="conv-person">👤 小红</span></div>
+<div class="conv-preview">她这次发了个"嗯"比平时慢了5分钟…</div>
+</div>
+</div>
+<div class="conv-item" onclick="showChat()">
+<div class="mentor-icon work">💼</div>
+<div class="conv-body">
+<div class="conv-top"><span class="conv-title">跟张总的1on1策略</span><span class="conv-time">昨天</span></div>
+<div class="conv-tags"><span class="conv-tag">职场军师</span><span class="conv-person">👤 张总</span></div>
+<div class="conv-preview">张总话里话外透露出对你的期望很高…</div>
+</div>
+</div>
+<div class="conv-item" onclick="showChat()">
+<div class="mentor-icon life">🧠</div>
+<div class="conv-body">
+<div class="conv-top"><span class="conv-title">下半年职业规划</span><span class="conv-time">昨天</span></div>
+<div class="conv-tags"><span class="conv-tag">总管家</span></div>
+<div class="conv-preview">结合你当前的技能栈和行业趋势…</div>
+</div>
+</div>
+<div class="conv-item" onclick="showChat()">
+<div class="mentor-icon love">❤️</div>
+<div class="conv-body">
+<div class="conv-top"><span class="conv-title">小红的生日礼物</span><span class="conv-time">3天前</span></div>
+<div class="conv-tags"><span class="conv-tag">情场顾问</span><span class="conv-person">👤 小红</span></div>
+<div class="conv-preview">上次约会她提到喜欢设计感的东西…</div>
+</div>
+</div>
+<div class="conv-item" onclick="showChat()">
+<div class="mentor-icon work">💼</div>
+<div class="conv-body">
+<div class="conv-top"><span class="conv-title">小王的竞争关系</span><span class="conv-time">5天前</span></div>
+<div class="conv-tags"><span class="conv-tag">职场军师</span><span class="conv-person">👤 小王</span></div>
+<div class="conv-preview">小王在会议上公开质疑你的方案…</div>
+</div>
+</div>
+</div>
+<button class="fab" onclick="showSheet('mentorPicker')">+</button>
+<div class="bottom-nav">
+<button class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><span>首页</span></button>
+<button class="nav-item" onclick="showPage('persons')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>通讯录</span></button>
+<button class="nav-item" onclick="showPage('profile')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>档案</span></button>
+<button class="nav-item" onclick="showPage('mentorSettings')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>导师</span></button>
+<button class="nav-item" onclick="showPage('backup')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>备份</span></button>
+</div>
+</div>
+
+<!-- ==================== 页面2：聊天页 ==================== -->
+<div class="page" id="page-chat">
+<div class="chat-header">
+<button class="back" onclick="showPage('home')">‹</button>
+<div class="ch-avatar love">❤️</div>
+<div class="ch-info">
+<div class="ch-name">情场顾问</div>
+<div class="ch-sub">洞察人心 · 你的情感参谋</div>
+</div>
+<div class="ch-actions">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="showSheet('contactPicker')"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+</div>
+</div>
+<div class="contact-tags">
+<div class="contact-tag"><span>👤 小红</span><button class="remove">✕</button></div>
+<button class="contact-tag" style="border-style:dashed;color:#007aff;font-weight:400;font-size:11px" onclick="showSheet('contactPicker')">+ 添加联系人</button>
+</div>
+<div class="chat-messages" id="chatMsgs">
+<div class="msg user">帮我分析一下小红今天发的这条消息<br>"最近好累啊，感觉什么都不想做"<span class="msg-time">10:23</span></div>
+<div class="msg assistant">这句话透露出几个信号：<br><br>1️⃣ **情绪低谷期** — 她可能在经历一段低能量状态，不一定是针对你<br>2️⃣ **试探性倾诉** — 愿意向你表达脆弱，说明信任你在增加<br>3️⃣ **需要的是共情，不是解决方案**<br><br>建议回复：先表达关心，不要急着给建议或追问原因。<br><br>"听起来今天确实不太好，要不要我陪你出去走走？或者就安静待着也行"<span class="msg-time">10:24</span></div>
+<div class="msg user">好的，那我这样回她。另外她最近总是加班到很晚，我要不要每天关心她一下？<span class="msg-time">10:25</span></div>
+<div class="msg assistant typing" id="typingMsg">
+<div class="typing-dots"><span></span><span></span><span></span></div>
+<span class="msg-time">正在输入...</span>
+</div>
+</div>
+<div class="chat-input">
+<button class="plus-btn" onclick="showSheet('imageOptions')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+<textarea rows="1" placeholder="输入消息..." oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+<button class="send-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
+</div>
+</div>
+
+<!-- ==================== 页面3：通讯录 ==================== -->
+<div class="page" id="page-persons">
+<div class="top-bar">
+<h1>通讯录</h1>
+<div class="right-actions">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" onclick="showSheet('addPerson')"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</div>
+</div>
+<div class="persons-search">
+<svg class="ps-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<input type="text" placeholder="搜索联系人...">
+</div>
+<div class="persons-list">
+<div class="person-item">
+<div class="person-avatar" style="background:#ff6b6b">小</div>
+<div class="person-info"><div class="person-name">小红</div><div class="person-meta"><span class="person-rel-badge romance">恋人</span><span>暧昧期</span></div></div>
+<span class="person-arrow">›</span>
+</div>
+<div class="person-item">
+<div class="person-avatar" style="background:#4a90d9">张</div>
+<div class="person-info"><div class="person-name">张总</div><div class="person-meta"><span class="person-rel-badge colleague">同事</span><span>直属领导</span></div></div>
+<span class="person-arrow">›</span>
+</div>
+<div class="person-item">
+<div class="person-avatar" style="background:#50c878">小</div>
+<div class="person-info"><div class="person-name">小王</div><div class="person-meta"><span class="person-rel-badge colleague">同事</span><span>同级竞争</span></div></div>
+<span class="person-arrow">›</span>
+</div>
+<div class="person-item">
+<div class="person-avatar" style="background:#ffa94d">妈</div>
+<div class="person-info"><div class="person-name">妈妈</div><div class="person-meta"><span class="person-rel-badge family">家人</span><span>母亲</span></div></div>
+<span class="person-arrow">›</span>
+</div>
+</div>
+</div>
+
+<!-- ==================== 页面4：个人档案 ==================== -->
+<div class="page" id="page-profile">
+<div class="top-bar">
+<h1>个人档案</h1>
+<div class="right-actions"><span class="left-btn" onclick="showPage('home')">完成</span></div>
+</div>
+<div class="profile-form">
+<div class="form-group"><div class="form-label">你的名字</div><input class="form-input" value="Nevin" placeholder="输入你的名字"></div>
+<div class="form-group"><div class="form-label">背景经历</div><textarea class="form-textarea" rows="2">28岁，互联网产品经理，目前在创业公司，之前在 BAT 工作过3年。</textarea></div>
+<div class="form-group"><div class="form-label">核心价值观</div><textarea class="form-textarea" rows="2">真诚、成长、自由。相信长期主义，重视人际关系质量。</textarea></div>
+<div class="form-group"><div class="form-label">性格特质</div><input class="form-input" value="INTP 型，理性偏好，社交能量有限但有深度"></div>
+<div class="form-group"><div class="form-label">人生目标</div><textarea class="form-textarea" rows="2">35岁前实现财务半自由，建立自己的产品。在重要关系上不留下遗憾。</textarea></div>
+<div class="form-group"><div class="form-label">生活节奏</div><input class="form-input" value="早起型，工作日朝10晚8，周末喜欢拍照"></div>
+<button class="save-btn">保存档案</button>
+</div>
+</div>
+
+<!-- ==================== 页面5：导师人设管理 ==================== -->
+<div class="page" id="page-mentorSettings">
+<div class="top-bar">
+<h1>导师人设</h1>
+<div class="right-actions"><span class="left-btn" onclick="showPage('home')">完成</span></div>
+</div>
+<div class="page-content">
+<div class="mentor-settings-list">
+<div class="ms-item" onclick="showStyleEditor(0)">
+<div class="ms-icon life">🧠</div>
+<div class="ms-info"><div class="ms-name">总管家 <span class="default-badge" style="font-size:9px;color:#fff;background:#007aff;padding:1px 5px;border-radius:3px">默认</span></div><div class="ms-style">理性、温暖、全局视角</div></div>
+<span class="ms-arrow">›</span>
+</div>
+<div class="ms-item" onclick="showStyleEditor(1)">
+<div class="ms-icon work">💼</div>
+<div class="ms-info"><div class="ms-name">职场军师</div><div class="ms-style">一针见血，懂潜规则，有策略思维</div></div>
+<span class="ms-arrow">›</span>
+</div>
+<div class="ms-item" onclick="showStyleEditor(2)">
+<div class="ms-icon love">❤️</div>
+<div class="ms-info"><div class="ms-name">情场顾问</div><div class="ms-style">风趣痞帅，像童锦程，关键时候要沉稳</div></div>
+<span class="ms-arrow">›</span>
+</div>
+<div class="ms-item" onclick="showStyleEditor(3)">
+<div class="ms-icon family">👨‍👩‍👧</div>
+<div class="ms-info"><div class="ms-name">家庭调解师</div><div class="ms-style">温和、共情力强、善于化解矛盾</div></div>
+<span class="ms-arrow">›</span>
+</div>
+<div class="ms-item" onclick="showStyleEditor(4)">
+<div class="ms-icon photo">📷</div>
+<div class="ms-info"><div class="ms-name">摄影导师</div><div class="ms-style">专业摄影知识、审美在线、善于发现进步</div></div>
+<span class="ms-arrow">›</span>
+</div>
+<div class="ms-item" onclick="showStyleEditor(5)">
+<div class="ms-icon growth">🌱</div>
+<div class="ms-info"><div class="ms-name">成长教练</div><div class="ms-style">理性、结构化思维、目标导向</div></div>
+<span class="ms-arrow">›</span>
+</div>
+</div>
+<!-- 人设编辑器 -->
+<div class="style-editor" id="styleEditor">
+<div class="se-title" id="seTitle">情场顾问 - 人设定制</div>
+<div class="se-hint">描述你希望这位导师以什么风格和你交流。例如性格特点、说话方式、语气等。</div>
+<textarea id="seTextarea" rows="4">风趣痞帅，像童锦程那样说话带点撩，偶尔带点土味情话。但在真正给我出建议的时候要沉稳认真，别开玩笑。</textarea>
+<button class="save-btn" style="margin-top:10px" onclick="document.getElementById('styleEditor').classList.remove('show');document.querySelector('.style-editor').scrollIntoView()">保存人设</button>
+</div>
+</div>
+</div>
+
+<!-- ==================== 页面6：备份页 ==================== -->
+<div class="page" id="page-backup">
+<div class="top-bar">
+<h1>数据备份</h1>
+<div class="right-actions"><span class="left-btn" onclick="showPage('home')">完成</span></div>
+</div>
+<div class="backup-page">
+<div class="backup-card">
+<h3>一键下载</h3>
+<p>下载包含所有对话记录、联系人档案、AI 记忆的完整备份包。下载后保存到电脑或移动硬盘即可。</p>
+<div class="backup-stats">
+<div class="bstat"><div class="num">47</div><div class="label">对话数</div></div>
+<div class="bstat"><div class="num">4</div><div class="label">联系人</div></div>
+<div class="bstat"><div class="num">~3.2MB</div><div class="label">预估大小</div></div>
+<div class="bstat"><div class="num">6/6</div><div class="label">备份次数</div></div>
+</div>
+<button class="download-btn">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+下载备份包
+</button>
+</div>
+<div class="backup-card">
+<h3>关于备份</h3>
+<p>备份包包含：数据库完整快照（对话 + 记忆 + 联系人）+ 上传的图片。恢复时将备份包解压到 data/ 目录即可。<br><br>建议每月至少下载一次。</p>
+</div>
+</div>
+</div>
+
+<!-- ==================== 导师选择面板 ==================== -->
+<div class="bottom-sheet" id="mentorPicker">
+<div class="bs-handle"></div>
+<div class="bs-title">选择导师</div>
+<div class="picker-grid">
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon life">🧠</div><div class="pi-info"><div class="pi-name">总管家 <span class="default-badge">默认</span></div><div class="pi-desc">统筹全局·你的人生CEO</div></div>
+</div>
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon work">💼</div><div class="pi-info"><div class="pi-name">职场军师</div><div class="pi-desc">一针见血·懂潜规则有策略</div></div>
+</div>
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon love">❤️</div><div class="pi-info"><div class="pi-name">情场顾问</div><div class="pi-desc">洞察人心·你的情感参谋</div></div>
+</div>
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon family">👨‍👩‍👧</div><div class="pi-info"><div class="pi-name">家庭调解师</div><div class="pi-desc">温和共情·善于化解矛盾</div></div>
+</div>
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon photo">📷</div><div class="pi-info"><div class="pi-name">摄影导师</div><div class="pi-desc">审美在线·专业摄影指导</div></div>
+</div>
+<div class="picker-item" onclick="hideSheet('mentorPicker');showChat()">
+<div class="pi-icon growth">🌱</div><div class="pi-info"><div class="pi-name">成长教练</div><div class="pi-desc">理性结构化·目标导向</div></div>
+</div>
+</div>
+</div>
+
+<!-- ==================== 添加联系人面板 ==================== -->
+<div class="bottom-sheet" id="contactPicker">
+<div class="bs-handle"></div>
+<div class="bs-title">选择联系人加入对话</div>
+<div class="contact-pick-list">
+<div class="cp-item" onclick="toggleCheck(this)">
+<div class="cp-checkbox"></div>
+<div class="cp-avatar" style="background:#ff6b6b">小</div>
+<div class="cp-info"><div class="cp-name">小红</div><div class="cp-rel">恋人 · 暧昧期</div></div>
+</div>
+<div class="cp-item" onclick="toggleCheck(this)">
+<div class="cp-checkbox"></div>
+<div class="cp-avatar" style="background:#4a90d9">张</div>
+<div class="cp-info"><div class="cp-name">张总</div><div class="cp-rel">同事 · 直属领导</div></div>
+</div>
+<div class="cp-item" onclick="toggleCheck(this)">
+<div class="cp-checkbox"></div>
+<div class="cp-avatar" style="background:#50c878">小</div>
+<div class="cp-info"><div class="cp-name">小王</div><div class="cp-rel">同事 · 同级竞争</div></div>
+</div>
+<div class="cp-item" onclick="toggleCheck(this)">
+<div class="cp-checkbox"></div>
+<div class="cp-avatar" style="background:#ffa94d">妈</div>
+<div class="cp-info"><div class="cp-name">妈妈</div><div class="cp-rel">家人 · 母亲</div></div>
+</div>
+</div>
+<button class="cp-done-btn" onclick="hideSheet('contactPicker')">确认添加（0）</button>
+</div>
+
+<!-- ==================== 删除确认弹窗 ==================== -->
+<div class="overlay" id="deleteDialog">
+<div class="dialog">
+<h3>删除此对话？</h3>
+<p>对话记录将被删除。联系人信息和 AI 长期记忆不受影响。</p>
+<div class="check-list">
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> 联系人信息不受影响</div>
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> AI 记忆不受影响</div>
+<div class="check-item"><svg viewBox="0 0 24 24" fill="none" stroke="#34c759" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg> 下次聊同一话题自动衔接</div>
+</div>
+<div class="dialog-btns">
+<button class="cancel" onclick="hideDialog('deleteDialog')">取消</button>
+<button class="delete" onclick="hideDialog('deleteDialog');showToast()">删除</button>
+</div>
+</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="globalToast">
+<span>✅ 对话已删除，联系人和 AI 记忆不受影响</span>
+<button class="undo-btn" style="color:#5e5ce6">撤销</button>
+</div>
+
+</div>
+
+<!-- 标注区 -->
+<div class="annotations" style="width:390px;margin:12px auto 0">
+<h3>📐 全页面设计稿清单</h3>
+<div class="annotation-item"><span class="num">1</span><div class="text"><strong>首页</strong> — 对话列表 + 导师过滤器 + FAB 新建</div></div>
+<div class="annotation-item"><span class="num">2</span><div class="text"><strong>聊天页</strong> — 消息气泡 + 流式输入 + 联系人标签 + 图片上传</div></div>
+<div class="annotation-item"><span class="num">3</span><div class="text"><strong>通讯录</strong> — 联系人列表 + 搜索 + 关系标签</div></div>
+<div class="annotation-item"><span class="num">4</span><div class="text"><strong>个人档案</strong> — 编辑背景、价值观、目标等</div></div>
+<div class="annotation-item"><span class="num">5</span><div class="text"><strong>导师人设</strong> — 列表 + 人设定制编辑器</div></div>
+<div class="annotation-item"><span class="num">6</span><div class="text"><strong>数据备份</strong> — 一键下载完整备份包</div></div>
+<div class="annotation-item"><span class="num">7</span><div class="text"><strong>导师选择面板</strong> — 底部弹出，总管家居首带默认标签</div></div>
+<div class="annotation-item"><span class="num">8</span><div class="text"><strong>联系人选择面板</strong> — 勾选加入当前对话</div></div>
+<div class="annotation-item"><span class="num">9</span><div class="text"><strong>删除确认弹窗</strong> — 明确告知联系人和记忆不受影响</div></div>
+</div>
+
+<script>
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  // highlight nav
+  const navMap = {home:0, persons:1, profile:2, mentorSettings:3, backup:4};
+  const idx = navMap[id];
+  if (idx !== undefined) document.querySelectorAll('.nav-item')[idx].classList.add('active');
+  // hide sheets
+  document.querySelectorAll('.bottom-sheet').forEach(s => s.classList.remove('show'));
+}
+function showChat() {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-chat').classList.add('active');
+  // scroll to bottom
+  setTimeout(() => {document.getElementById('chatMsgs').scrollTop = 9999}, 50);
+}
+function showSheet(id) {
+  document.getElementById(id).classList.add('show');
+}
+function hideSheet(id) {
+  document.getElementById(id).classList.remove('show');
+}
+function showDialog(id) {
+  document.getElementById(id).classList.add('show');
+}
+function hideDialog(id) {
+  document.getElementById(id).classList.remove('show');
+}
+function showToast() {
+  const t = document.getElementById('globalToast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+function showSearch() {alert('🔍 搜索功能');}
+function toggleCheck(el) {
+  const cb = el.querySelector('.cp-checkbox');
+  cb.classList.toggle('checked');
+  const count = document.querySelectorAll('.cp-checkbox.checked').length;
+  document.querySelector('.cp-done-btn').textContent = '确认添加（' + count + '）';
+}
+function showStyleEditor(idx) {
+  const names = ['总管家','职场军师','情场顾问','家庭调解师','摄影导师','成长教练'];
+  const desc = ['理性、温暖、全局视角','一针见血，懂潜规则，有策略思维','风趣痞帅，像童锦程，关键时候要沉稳','温和、共情力强、善于化解矛盾','专业摄影知识、审美在线、善于发现进步','理性、结构化思维、目标导向'];
+  document.getElementById('seTitle').textContent = names[idx] + ' - 人设定制';
+  document.getElementById('seTextarea').value = desc[idx];
+  document.getElementById('styleEditor').classList.add('show');
+}
+</script>
+</body>
+</html>
