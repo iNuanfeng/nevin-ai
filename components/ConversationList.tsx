@@ -10,6 +10,7 @@ export interface ConversationItemData {
   mentor_title: string;
   mentor_category: string;
   title: string | null;
+  person_names?: string | null;
   summary: string | null;
   last_message: string | null;
   last_message_at: string | null;
@@ -82,6 +83,30 @@ export default function ConversationList({
         <div key={conv.id} className="relative group">
           <div
             onClick={() => router.push(`/conversations/${conv.id}`)}
+            onTouchStart={(e) => {
+              const el = e.currentTarget as any;
+              el._touchStartX = e.touches[0].clientX;
+              el.style.transition = 'none';
+            }}
+            onTouchMove={(e) => {
+              const el = e.currentTarget as any;
+              if (el._touchStartX === undefined) return;
+              const delta = e.touches[0].clientX - el._touchStartX;
+              if (delta < 0) {
+                el.style.transform = `translateX(${Math.max(delta, -80)}px)`;
+                el._swiped = delta < -60;
+              }
+            }}
+            onTouchEnd={(e) => {
+              const el = e.currentTarget as any;
+              el.style.transition = 'transform 0.3s ease';
+              el.style.transform = '';
+              if (el._swiped) {
+                setTimeout(() => onDelete(conv.id), 0);
+              }
+              el._touchStartX = undefined;
+              el._swiped = false;
+            }}
             className="flex gap-3 px-5 py-3 cursor-pointer transition-colors active:bg-[#f2f3f5]"
           >
             <div
@@ -104,6 +129,11 @@ export default function ConversationList({
                   {conv.mentor_name}
                 </span>
               </div>
+            {conv.person_names && (
+              <div className="flex items-center gap-1 mt-px">
+                <span className="text-[11px] text-[#aeaeb2]">👤 {conv.person_names}</span>
+              </div>
+            )}
               <div className="text-[13px] text-[#8e8e93] truncate mt-0.5">
                 {getPreview(conv.last_message || "")}
               </div>

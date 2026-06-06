@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 
 export interface Person {
+  archived: number;
   id: number;
   name: string;
   relationship: string | null;
@@ -16,6 +17,7 @@ export interface Person {
 
 export interface CreatePersonInput {
   name: string;
+  archived?: number;
   relationship?: string;
   category?: string;
   background?: string;
@@ -28,8 +30,11 @@ export interface CreatePersonInput {
 /**
  * 获取联系人列表（按创建时间倒序）
  */
-export function getAllPersons(): Person[] {
+export function getAllPersons(archived?: number): Person[] {
   const db = getDb();
+  if (archived !== undefined && archived >= 0) {
+    return db.prepare("SELECT * FROM persons WHERE archived = ? ORDER BY created_at DESC").all(archived) as Person[];
+  }
   return db.prepare("SELECT * FROM persons ORDER BY created_at DESC").all() as Person[];
 }
 
@@ -95,9 +100,16 @@ export function updatePerson(id: number, input: Partial<CreatePersonInput>): Per
 /**
  * 删除联系人
  */
-export function deletePerson(id: number): void {
+export function archivePerson(id: number): Person | undefined {
   const db = getDb();
-  db.prepare("DELETE FROM persons WHERE id = ?").run(id);
+  db.prepare("UPDATE persons SET archived = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+  return getPersonById(id);
+}
+
+export function unarchivePerson(id: number): Person | undefined {
+  const db = getDb();
+  db.prepare("UPDATE persons SET archived = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+  return getPersonById(id);
 }
 
 // ── 对话-联系人关联管理 ──

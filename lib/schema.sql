@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS persons (
     relationship_dynamics TEXT,
     recent_status TEXT,
     strategy_notes TEXT,
+    archived INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

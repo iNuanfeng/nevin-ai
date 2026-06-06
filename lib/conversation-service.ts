@@ -5,6 +5,7 @@ export interface Conversation {
   mentor_id: number;
   title: string | null;
   summary: string | null;
+  person_names: string | null;
   deleted: number;
   deleted_at: string | null;
   created_at: string;
@@ -28,6 +29,7 @@ export interface ConversationListItem {
   mentor_category: string;
   title: string | null;
   summary: string | null;
+  person_names: string | null;
   last_message: string | null;
   last_message_at: string | null;
   created_at: string;
@@ -50,6 +52,7 @@ export function getConversations(mentorId?: number): ConversationListItem[] {
       c.summary,
       (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
       (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_at,
+      (SELECT GROUP_CONCAT(p.name, ', ') FROM conversation_persons cp JOIN persons p ON p.id = cp.person_id WHERE cp.conversation_id = c.id) AS person_names,
       c.created_at
     FROM conversations c
     JOIN mentors m ON m.id = c.mentor_id

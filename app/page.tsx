@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, ArrowUp, Download, X, Check } from "lucide-react";
+import { Search, Plus, ArrowUp, Download, X, Check, Archive, RotateCcw } from "lucide-react";
 
 import BottomNav, { type TabId } from "@/components/BottomNav";
 import MentorFilter from "@/components/MentorFilter";
@@ -40,8 +40,14 @@ export default function HomePage() {
   // ── UI states ──
   const [showPicker, setShowPicker] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleteMode, setDeleteMode] = useState<"conversation" | "person" | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [undoTimer, setUndoTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [toastAction, setToastAction] = useState<(() => void) | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Persons view
   const [personSearch, setPersonSearch] = useState("");
@@ -131,10 +137,27 @@ export default function HomePage() {
     if (activeTab === "backup") fetchBackupStats();
   }, [activeTab, fetchConversations, fetchBackupStats]);
 
+  // Register service worker
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
   // ── Toast ──
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleUnarchivePerson = async (id: number) => {
+    try {
+      await fetch(`/api/persons/${id}/unarchive`, { method: "PUT" });
+      fetchPersons();
+      showToast("联系人已恢复");
+    } catch {
+      showToast("操作失败");
+    }
   };
 
   // ── Delete conversation ──
@@ -142,20 +165,38 @@ export default function HomePage() {
     setDeleteTarget(id);
   };
 
-  const confirmDelete = async () => {
-    if (deleteTarget === null) return;
-    try {
-      await fetch(`/api/conversations/${deleteTarget}`, { method: "DELETE" });
-      const deletedId = deleteTarget;
-      setDeleteTarget(null);
-      fetchConversations();
-      showToast("对话已删除");
-    } catch {
-      showToast("删除失败");
+  const confirmDelete = () => {
+    if (deleteTarget === null || deleteMode === null) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
+    
+    if (deleteMode === "conversation") {
+      setPendingDelete(id);
+      const timer = setTimeout(async () => {
+        try {
+          await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+          fetchConversations();
+        } catch {}
+        setPendingDelete(null);
+      }, 3000);
+      setUndoTimer(timer);
+      setToastMsg("对话已删除");
+      setToastAction(() => () => {
+        clearTimeout(timer);
+        setPendingDelete(null);
+        setToastMsg(null);
+        setToastAction(null);
+      });
+    } else {
+      fetch(`/api/persons/${id}/archive`, { method: "PUT" }).then(() => {
+        fetchPersons();
+      }).catch(() => {});
+      showToast("联系人已归档");
     }
+    setDeleteMode(null);
   };
 
-  const handleDeleteCancel = () => setDeleteTarget(null);
+  const handleDeleteCancel = () => { setDeleteTarget(null); setDeleteMode(null); };
 
   // ── Create conversation ──
   const handleSelectMentor = async (mentor: MentorOption) => {
@@ -213,14 +254,9 @@ export default function HomePage() {
     setShowPersonForm(true);
   };
 
-  const handleDeletePerson = async (id: number) => {
-    try {
-      await fetch(`/api/persons/${id}`, { method: "DELETE" });
-      fetchPersons();
-      showToast("联系人已删除");
-    } catch {
-      showToast("删除失败");
-    }
+  const handleArchivePerson = (id: number) => {
+    setDeleteTarget(id);
+    setDeleteMode("person");
   };
 
   // ── Profile ──
@@ -246,13 +282,24 @@ export default function HomePage() {
   };
 
   // ── Filter conversations by mentor ──
-  const filteredConversations = filterCategory
-    ? conversations.filter((c) => c.mentor_category === filterCategory)
-    : conversations;
+  const filteredConversations = conversations.filter((c) => {
+    if (filterCategory && c.mentor_category !== filterCategory) return false;
+    if (searchTerm) {
+      const term = searchTerm;
+      const title = (c.title || c.mentor_name || '');
+      const msg = (c.last_message || '');
+      const persons = (c.person_names || '');
+      if (!title.includes(term) && !msg.includes(term) && !persons.includes(term)) return false;
+    }
+    return true;
+  });
 
-  const filteredPersons = personSearch
-    ? personsFull.filter((p: any) => p.name.includes(personSearch))
-    : personsFull;
+  const filteredPersons = personsFull.filter((p: any) => {
+    if (showArchived && p.archived !== 1) return false;
+    if (!showArchived && p.archived !== 0) return false;
+    if (personSearch && !(p.name || '').includes(personSearch)) return false;
+    return true;
+  });
 
   // ──── RENDER ────
   return (
@@ -265,7 +312,7 @@ export default function HomePage() {
               Nevin
             </h1>
             <div className="flex items-center gap-3.5">
-              <Search size={20} className="text-[#666] cursor-pointer" />
+              <Search size={20} className="text-[#666] cursor-pointer" onClick={() => setShowSearch(!showSearch)} />
               <div
                 onClick={() => setActiveTab("profile")}
                 className="w-7.5 h-7.5 rounded-full bg-gradient-to-br from-[#5e5ce6] to-[#00d4aa] flex items-center justify-center text-white text-xs font-semibold cursor-pointer"
@@ -274,6 +321,17 @@ export default function HomePage() {
               </div>
             </div>
           </header>
+          {showSearch && (
+            <div className="px-5 py-2">
+              <input
+                autoFocus
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="搜索对话、联系人…"
+                className="w-full px-3.5 py-2 rounded-xl bg-[#f2f3f5] text-sm outline-none border-none"
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between px-5 pt-0.5 pb-0.5">
             <span className="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider">
@@ -314,6 +372,14 @@ export default function HomePage() {
               通讯录
             </h1>
           </div>
+          <div className="flex gap-2 px-5 pb-2">
+            <button onClick={() => setShowArchived(false)} className={`px-3 py-1 rounded-full text-xs font-medium border-none cursor-pointer transition-colors ${!showArchived ? "bg-[#1d1d1f] text-white" : "bg-[#f2f3f5] text-[#555]"}`}>
+              联系人
+            </button>
+            <button onClick={() => setShowArchived(true)} className={`px-3 py-1 rounded-full text-xs font-medium border-none cursor-pointer transition-colors ${showArchived ? "bg-[#1d1d1f] text-white" : "bg-[#f2f3f5] text-[#555]"}`}>
+              已归档
+            </button>
+          </div>
 
           <div className="mx-5 my-1 mb-2 relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#aeaeb2]" />
@@ -346,21 +412,23 @@ export default function HomePage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleDeletePerson(p.id)}
-                  className="text-[11px] text-[#ff3b30] bg-transparent border-none cursor-pointer p-1"
+                  onClick={() => showArchived ? handleUnarchivePerson(p.id) : handleArchivePerson(p.id)}
+                  className="text-[11px] bg-transparent border-none cursor-pointer p-1"
                 >
-                  <X size={14} />
+                  {showArchived ? <RotateCcw size={14} className="text-[#007aff]" /> : <Archive size={14} className="text-[#8e8e93]" />}
                 </button>
               </div>
             ))}
           </div>
 
-          <button
-            onClick={() => { setEditingPersonId(null); setPersonForm({ name: "", relationship: "", category: "", background: "" }); setShowPersonForm(true); }}
-            className="fixed bottom-[88px] right-[26px] w-12 h-12 rounded-full bg-[#007aff] text-white flex items-center justify-center shadow-lg border-none cursor-pointer z-10"
-          >
-            <Plus size={24} />
-          </button>
+          {!showArchived && (
+            <button
+              onClick={() => { setEditingPersonId(null); setPersonForm({ name: "", relationship: "", category: "", background: "" }); setShowPersonForm(true); }}
+              className="fixed bottom-[88px] right-[26px] w-12 h-12 rounded-full bg-[#007aff] text-white flex items-center justify-center shadow-lg border-none cursor-pointer z-10"
+            >
+              <Plus size={24} />
+            </button>
+          )}
 
           {/* Person form bottom sheet */}
           {showPersonForm && (
@@ -506,34 +574,61 @@ export default function HomePage() {
         <>
           <div className="fixed inset-0 bg-black/40 z-20" onClick={handleDeleteCancel} />
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white w-[280px] rounded-2xl p-6 shadow-lg z-25">
-            <h3 className="text-[17px] font-bold mb-1.5 text-[#1d1d1f]">删除对话</h3>
-            <p className="text-[13px] text-[#8e8e93] leading-relaxed mb-1">
-              删除后对话内容将不可见。注意：
-            </p>
-            <div className="my-2 mb-4 space-y-1">
-              {["联系人不受影响", "记忆不受影响", "用户档案不受影响"].map((t) => (
-                <div key={t} className="text-[13px] text-[#555] flex items-center gap-1.5">
-                  <Check size={14} className="text-[#34c759] flex-shrink-0" />
-                  {t}
+            {deleteMode === "person" ? (
+              <>
+                <h3 className="text-[17px] font-bold mb-1.5 text-[#1d1d1f]">归档联系人</h3>
+                <p className="text-[13px] text-[#8e8e93] leading-relaxed mb-4">
+                  归档后该联系人将不在通讯录主列表显示，AI 记忆不受影响，可随时取消归档。
+                </p>
+                <div className="flex gap-2.5">
+                  <button onClick={handleDeleteCancel} className="flex-1 py-3 rounded-xl bg-[#f2f3f5] text-[#1d1d1f] text-[15px] font-semibold border-none cursor-pointer">
+                    取消
+                  </button>
+                  <button onClick={confirmDelete} className="flex-1 py-3 rounded-xl bg-[#ff3b30] text-white text-[15px] font-semibold border-none cursor-pointer">
+                    归档
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-2.5">
-              <button onClick={handleDeleteCancel} className="flex-1 py-3 rounded-xl bg-[#f2f3f5] text-[#1d1d1f] text-[15px] font-semibold border-none cursor-pointer">
-                取消
-              </button>
-              <button onClick={confirmDelete} className="flex-1 py-3 rounded-xl bg-[#ff3b30] text-white text-[15px] font-semibold border-none cursor-pointer">
-                删除
-              </button>
-            </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-[17px] font-bold mb-1.5 text-[#1d1d1f]">删除对话</h3>
+                <p className="text-[13px] text-[#8e8e93] leading-relaxed mb-1">
+                  删除后对话内容将不可见。注意：
+                </p>
+                <div className="my-2 mb-4 space-y-1">
+                  {["联系人不受影响", "记忆不受影响", "用户档案不受影响"].map((t) => (
+                    <div key={t} className="text-[13px] text-[#555] flex items-center gap-1.5">
+                      <Check size={14} className="text-[#34c759] flex-shrink-0" />
+                      {t}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2.5">
+                  <button onClick={handleDeleteCancel} className="flex-1 py-3 rounded-xl bg-[#f2f3f5] text-[#1d1d1f] text-[15px] font-semibold border-none cursor-pointer">
+                    取消
+                  </button>
+                  <button onClick={confirmDelete} className="flex-1 py-3 rounded-xl bg-[#ff3b30] text-white text-[15px] font-semibold border-none cursor-pointer">
+                    删除
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
 
       {/* ── Toast ── */}
       {toastMsg && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md text-white px-4 py-3 rounded-xl text-sm z-30 whitespace-nowrap max-w-[88%] toast">
-          {toastMsg}
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md text-white px-4 py-3 rounded-xl text-sm z-30 max-w-[88%] toast flex items-center gap-2.5">
+          <div className="flex-1">
+            {toastMsg}
+            <div className="text-[11px] text-white/60">联系人和 AI 记忆不受影响</div>
+          </div>
+          {toastAction && (
+            <button onClick={toastAction} className="text-[#007aff] font-semibold text-sm border-none bg-transparent cursor-pointer whitespace-nowrap">
+              撤销
+            </button>
+          )}
         </div>
       )}
 

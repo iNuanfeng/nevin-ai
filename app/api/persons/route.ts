@@ -6,9 +6,12 @@ export const runtime = "nodejs";
 /**
  * GET /api/persons — 联系人列表
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const persons = getAllPersons();
+    const { searchParams } = new URL(req.url);
+    const archived = searchParams.get("archived");
+    const filter = archived !== null ? parseInt(archived) : -1;
+    const persons = getAllPersons(filter);
     return NextResponse.json({ persons });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";

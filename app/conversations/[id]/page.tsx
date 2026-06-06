@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Send, Image } from "lucide-react";
+import { ArrowLeft, Plus, Send, Image, MoreHorizontal } from "lucide-react";
 import MessageBubble, { TypingIndicator, type MessageData } from "@/components/MessageBubble";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
 
@@ -265,6 +265,7 @@ export default function ChatPage() {
         </div>
         <button onClick={handleOpenPersonSelector} className="text-[#666] border-none bg-transparent cursor-pointer p-1" title="添加联系人">
           <Plus size={20} />
+                            <MoreHorizontal size={20} />
         </button>
       </header>
 

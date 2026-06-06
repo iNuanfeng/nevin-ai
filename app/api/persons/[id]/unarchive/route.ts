@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPersonById, updatePerson } from "@/lib/person-service";
+import { getPersonById, unarchivePerson } from "@/lib/person-service";
 
 export const runtime = "nodejs";
 
 /**
- * PUT /api/persons/:id — 更新联系人
+ * PUT /api/persons/:id/unarchive — 取消归档联系人
  */
 export async function PUT(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -17,8 +17,7 @@ export async function PUT(
     if (!existing) {
       return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
-    const body = await req.json();
-    const updated = updatePerson(personId, body);
+    const updated = unarchivePerson(personId);
     return NextResponse.json({ person: updated });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
