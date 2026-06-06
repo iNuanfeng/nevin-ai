@@ -2,6 +2,26 @@
 
 ## v0.1 — Phase 1 (2026-06-07)
 
+## v0.1 — Phase 2 (2026-06-07)
+
+### Added
+- **Frontend**:
+  - 首页（对话列表 + 导师过滤器 + FAB 新建）
+  - 聊天页（SSE 流式对话、联系人管理、Markdown 渲染）
+  - 通讯录（联系人 CRUD、搜索）
+  - 个人档案（6 字段表单 + 保存）
+  - 导师人设管理（展开式编辑器）
+  - 备份页（统计卡片）
+  - 底部导航（5 tab 切换）
+- **Components**:
+  - `BottomNav.tsx` / `MentorFilter.tsx` / `ConversationList.tsx`
+  - `MentorPicker.tsx` / `PersonSelector.tsx` / `MessageBubble.tsx`
+  - `MarkdownRenderer.tsx` / `MentorSettings.tsx`
+- **Documentation**: `docs/stages/stage-2-frontend.md`
+
+### Changed
+- `app/page.tsx` — 从占位页重写为完整主壳
+- `app/globals.css` — 添加设计系统 CSS 变量和动画
 ### Added
 - **Service layer** (`lib/`):
   - `mentor-service.ts` — 导师完整查询 + style_config 更新
