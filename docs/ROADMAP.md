@@ -29,6 +29,19 @@
 
 **验证**：`npm run dev` 后浏览器打开能看到空白布局，SQLite 文件生成且 mentors 表有 6 行数据
 
+> **🔔 数据库文件管理策略**
+> - **Phase 0 ~ Phase 1 开发期**：`data/` 保留在 git 中，方便 clone 后直接运行，无需手动 seed
+> - **进入联调/测试阶段前**（见 Checkpoint A）：执行拆分后 `data/` 从 git 中移除，改用独立 seed 脚本
+> - **上线后**：数据库使用外部服务（Turso / LiteFS / PostgreSQL），连接串配在环境变量中
+
+**Checkpoint A — 数据库从 git 中拆出**
+
+位于 Phase 1 后端完工 → Phase 2 前端开工之前。届时执行：
+1. 将 `lib/db.ts` 中的建表和 seed 逻辑拆为独立脚本 `lib/seed.ts`，可通过 `tsx lib/seed.ts` 单独执行
+2. 移除 git 中的 `data/nevin.db`，将 `data/` 加回 `.gitignore`
+3. 在 `package.json` 中添加 `"seed": "tsx lib/seed.ts"` 脚本
+
+
 ---
 
 ## Phase 1 — 后端核心服务（1.5 天）
