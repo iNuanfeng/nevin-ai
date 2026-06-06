@@ -1,90 +1,135 @@
-# Nevin AI — Phase 0 测试计划
+# Nevin AI — 测试计划
 
 > 版本：v0.1
-> 测试日期：2026-06-06
-> 测试目标：验证 Phase 0（项目脚手架）全部交付物完整、可运行
+> 更新：2026-06-07
+> 覆盖：Phase 0（脚手架）+ Phase 1（后端核心服务）
 
 ---
 
-## 测试范围
+## Phase 0 测试范围（已通过）
 
-### 1. 项目启动
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| npm install | 依赖安装无报错，node_modules 生成 | 终端输出 |
-| npm run dev | Next.js 开发服务器 0 错误启动 | 终端输出 / 端口监听 |
-| 浏览器访问 localhost:3000 | HTTP 200，页面正常渲染 | curl / 浏览器 |
-| HMR（热更新） | 修改文件后页面自动刷新 | 手动验证 |
-
-### 2. 数据库（SQLite）
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| data/nevin.db 自动生成 | 首次启动后自动创建 | 文件存在检查 |
-| 所有表按 schema 创建 | profile/mentors/conversations/messages/persons/conversation_persons/memories/events 共8张 | sqlite3 .tables |
-| FTS5 虚拟表创建 | memories_fts 存在 | sqlite3 .tables |
-| conversations.deleted 字段 | 允许软删除，默认 0 | PRAGMA table_info |
-| messages.role CHECK 约束 | 仅允许 user/assistant | PRAGMA table_info |
-| memories.importance CHECK | 范围 1-10，默认 5 | PRAGMA table_info |
-| 外键约束启用 | PRAGMA foreign_keys = ON | PRAGMA foreign_keys |
-| WAL 模式 | 启用 WAL | PRAGMA journal_mode |
-
-### 3. 导师 Seeding 数据
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| mentors 表行数 | 恰好 6 行 | SELECT COUNT(*) |
-| 导师列表完整 | 总管家/职场军师/情场顾问/家庭调解师/摄影导师/成长教练 | SELECT name |
-| 必填字段非空 | 全体 name, system_prompt 非 NULL | SELECT ... IS NULL |
-| sort_order 连续 | 0-5 各一条 | SELECT sort_order |
-| category 合法 | 不包含未知分类值 | SELECT DISTINCT category |
-| 中文内容正确 | 无乱码、无截断 | 手动阅读 |
-| 幂等性 | 多次重启不产生重复 seed | 重启后再次计数 |
-
-### 4. 目录结构
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| app/ | 含 layout.tsx / page.tsx / globals.css / api/ | ls |
-| app/api/ | mentors/route.ts 存在 | ls |
-| components/ | 目录存在 | ls |
-| lib/ | 含 db.ts / schema.sql | ls |
-| data/ | 含 .gitkeep 或 nevin.db | ls |
-| public/ | 图标和 manifest 资源 | ls |
-| .env.example | 存在，含 DEEPSEEK_API_KEY | 文件检查 |
-| next.config.ts | 含 serverExternalPackages | 文件检查 |
-
-### 5. 全局布局 & PWA
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| Tailwind CSS v4 | 样式生效 | curl HTML / 浏览器 |
-| 页面 title | `<title>Nevin AI</title>` | curl HTML |
-| PWA manifest | manifest link 存在 | curl HTML |
-| Apple Web App | apple-mobile-web-app-capable meta | curl HTML |
-| Viewport meta | width=device-width，禁止缩放 | curl HTML |
-| 主题色 | themeColor: #ffffff | layout.tsx 检查 |
-
-### 6. API & 浏览器访问
-
-| 测试项 | 预期结果 | 验证手段 |
-|--------|----------|----------|
-| GET /api/mentors | 返回 JSON，含 6 条 | curl |
-| GET / HTML 内容 | 含 "Nevin" 标题和导师 chip | curl |
-| 首页空状态 | 显示"还没有对话" | curl |
+参见 tests/TEST_PLAN.md Phase 0 部分。
 
 ---
 
-## 验证方法说明
+## Phase 1 测试范围
 
-- 自动化验证：通过 curl + sqlite3 命令行执行，输出 pass/fail
+### 1. 项目环境
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| `npm run dev` 启动 | 0 错误，端口监听正常 |
+| DEEPSEEK_API_KEY 配置 | 未设置时 Chat API 返回 500 error 而非崩溃 |
+
+### 2. 数据库 CRUD
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| profile 自动创建 | 首次读取时自动生成一行空白档案 |
+| 外键约束 | 插入无效 mentor_id 时拒绝写入 |
+| FTS5 同步 | 写入记忆后，FTS5 能检索到 |
+| 数据库索引 | conversations.mentor_id / conversations.deleted / messages.conversation_id 等 |
+
+### 3. Mentor API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| GET /api/mentors | 6 位导师，含 system_prompt 和 style_config 字段 |
+| PUT /api/mentors/1 | 更新 style_config 后持久化，GET 查得到 |
+| 404 处理 | PUT 不存在的 ID 返回 404 |
+
+### 4. Person API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| POST /api/persons | 创建联系人，返回 201 + 完整记录 |
+| GET /api/persons | 列表返回全部联系人 |
+| PUT /api/persons/:id | 部分更新不覆盖未传字段 |
+| DELETE /api/persons/:id | 删除后无法再获取 |
+| 400 验证 | 无 name 时返回 400 |
+| 404 验证 | 操作不存在的 ID 返回 404 |
+
+### 5. Conversation API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| POST /api/conversations | 创建对话，返回 201 |
+| GET /api/conversations | 列表含最后一条消息预览和导师信息 |
+| GET /api/conversations?mentorId=1 | 按导师筛选 |
+| GET /api/conversations/:id | 返回对话详情 + 消息列表 |
+| DELETE /api/conversations/:id | 软删除（deleted=1），不再出现在列表 |
+| 400 验证 | 无 mentorId 时返回 400 |
+| 404 验证 | GET/DELETE 不存在的 ID |
+
+### 6. Conversation-Person API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| POST /api/conversation-persons | 对话中添加联系人 |
+| GET /api/conversation-persons?conversationId=1 | 返回对话关联的联系人 |
+| DELETE /api/conversation-persons | 从对话中移除联系人 |
+| 400 验证 | 缺少 conversationId 或 personId |
+| 幂等性 | 重复添加不报错（INSERT OR IGNORE） |
+
+### 7. Profile API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| GET /api/profile | 返回 profile 对象（id=1） |
+| PUT /api/profile | 更新字段，不覆盖未传字段 |
+| 自动创建 | 空数据库首次 GET 也会自动创建 |
+
+### 8. Memory API
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| POST /api/memory | 创建记忆，返回 201 |
+| GET /api/memory?q=关键词 | FTS5 按内容检索命中 |
+| GET /api/memory（空搜索） | 按重要度排列返回 Top-N |
+| GET /api/memory?personId= | 按关联人物筛选 |
+| GET /api/memory?limit=3 | 限制返回条数 |
+| 400 验证 | 无 content 时 POST 返回 400 |
+
+### 9. Chat API — SSE 流式
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| POST /api/chat 无 API Key | 返回 SSE error 事件，格式正确 |
+| SSE 响应头 | Content-Type: text/event-stream |
+| SSE 事件格式 | event: xxx 行 + data: JSON 行 |
+| 400 验证 | 无 conversationId 或 content 返回 400 |
+| 消息持久化 | AI 回复后自动保存到 messages 表 |
+| 对话 updated_at | AI 回复后自动更新 |
+
+### 10. Chat Service — System Prompt 组装
+
+| 测试项 | 预期结果 |
+|--------|----------|
+| System Prompt 模板 | 包含：导师人设 → 风格要求 → 用户档案 → 联系人 → 记忆 → 上下文 |
+| 联系人信息注入 | 对话关联的联系人档案完整拼入 prompt |
+| 记忆排序 | 按重要度从高到低排列 |
+| 空状态 | 无联系人/无记忆时不插入对应章节 |
+
+### 11. 错误处理
+
+| 场景 | 预期 |
+|------|------|
+| 请求参数缺失 | 400 + { error: "描述" } |
+| 资源不存在 | 404 + { error: "not found" } |
+| 服务端异常 | 500 + { error: "描述" } |
+| SSE 流中错误 | event: error + { error: "描述" } |
+
+---
+
+## 验证方法
+
+- API 自动化验证：通过 curl 脚本逐一测试，记录 pass/fail
+- 数据库验证：通过 sqlite3 命令行检查数据状态
+- SSE 格式检查：验证 event: / data: 格式 + Content-Type 响应头
 - 人工验证：MANUAL_CHECKLIST.md 列出需肉眼确认的项
-- 环境隔离：测试在开发环境执行，不依赖 DeepSeek API Key
 
-## 未覆盖范围（后续 Phase）
+## 未覆盖范围
 
-- 记忆检索 FTS5 功能测试 → Phase 1
-- SSE 流式响应测试 → Phase 1
-- 前端组件交互测试 → Phase 2
-- E2E 全流程测试 → Phase 3
+- 异步后处理（记忆提炼/联系人丰富）→ 需要 DeepSeek API Key + 实际对话，在集成环境测试
+- 图片上传 / 多模态 → Phase 3
+- 对话标题自动生成的智能程度 → 功能验证已覆盖，语义评估留待用户验收

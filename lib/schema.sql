@@ -95,8 +95,25 @@ CREATE TABLE IF NOT EXISTS events (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 全文索引（需要在建表之后创建）
-CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+-- 全文索引 — trigram 分词器（支持中文 + BM25 排序）
+
+DROP TABLE IF EXISTS memories_fts;
+CREATE VIRTUAL TABLE memories_fts USING fts5(
     content,
+    tokenize='trigram',
     content=memories
 );
+
+-- FTS5 同步触发器：保持 memories 与 memories_fts 自动同步
+CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+  INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+  INSERT INTO memories_fts(memories_fts, rowid, content) VALUES('delete', old.rowid, old.content);
+  INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;

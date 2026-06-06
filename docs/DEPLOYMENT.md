@@ -50,6 +50,19 @@ pnpm dev
 
 ## 生产部署
 
+### 1. 配置环境变量
+
+```bash
+# SSH 到服务器后
+cd /path/to/nevin-ai
+
+# 创建配置（.env.local 已在 .gitignore 中，git pull 不会覆盖它）
+cat > .env.local << 'EOF'
+DEEPSEEK_API_KEY=sk-your-key-here
+EOF
+```
+
+
 ```bash
 # 1. 构建
 npm run build

@@ -45,7 +45,7 @@ export function updateProfile(input: UpdateProfileInput): Profile {
   const params: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     if (value !== undefined) {
-      sets.push(`${key} = @${key}`);
+      sets.push(`"${key}" = @${key}`);
       params[key] = value;
     }
   }

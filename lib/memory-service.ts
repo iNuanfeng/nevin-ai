@@ -22,8 +22,13 @@ export interface StoreMemoryInput {
 
 /**
  * 检索相关记忆。
- * 使用 FTS5 + 重要度混合排序：score = importance * 0.6 + bm25 * 0.4
- * 支持按 mentor 和 person 筛选。
+ *
+ * 搜索策略：
+ * - 查询长度 >= 3 时：使用 FTS5 trigram MATCH（支持中文 + BM25 排序）
+ * - 查询长度 < 3 时：使用 LIKE %keyword%（短词 trigram 无法匹配）
+ * - 空查询：按重要度 + 时间倒序
+ *
+ * 支持按 mentor 和 person（entities 字段）筛选。
  */
 export function retrieveRelevant(
   query: string,
@@ -36,50 +41,73 @@ export function retrieveRelevant(
   const db = getDb();
   const limit = options?.limit ?? 10;
 
-  // 如果查询词为空，按重要度返回最近的记忆
-  if (!query || query.trim() === "") {
-    let sql = "SELECT * FROM memories WHERE 1=1";
+  const buildWhereClause = (useAlias: boolean) => {
+    const clauses: string[] = [];
     const params: unknown[] = [];
+    const p = useAlias ? "m." : "";
+
     if (options?.mentorId !== undefined) {
-      sql += " AND mentor_id = ?";
+      clauses.push(`${p}mentor_id = ?`);
       params.push(options.mentorId);
     }
     if (options?.personId !== undefined) {
-      sql += " AND entities LIKE ?";
+      clauses.push(`${p}entities LIKE ?`);
       params.push(`%"${options.personId}"%`);
     }
+
+    return { clauses, params };
+  };
+
+  const emptyQuery = !query || query.trim() === "";
+
+  // ── 空查询：按重要度 + 时间返回 ──
+  if (emptyQuery) {
+    let sql = "SELECT * FROM memories WHERE 1=1";
+    const { clauses, params } = buildWhereClause(false);
+    if (clauses.length) sql += " AND " + clauses.join(" AND ");
     sql += " ORDER BY importance DESC, created_at DESC LIMIT ?";
     params.push(limit);
     return db.prepare(sql).all(...params) as Memory[];
   }
 
-  // FTS5 全文搜索
-  let ftsSql = `
-    SELECT m.*, 
-           (m.importance * 0.6 + COALESCE(mf.rank, 0) * 0.4) AS combined_score
+  // ── 短查询（1-2 chars）：FTS5 trigram 无法处理，回退 LIKE ──
+  // 对任何语言的 1-2 字查询都走 LIKE，因为 trigram 最低 3 字
+  if (query.length < 3) {
+    let sql = "SELECT * FROM memories WHERE content LIKE ?";
+    const params: unknown[] = [`%${query}%`];
+    const { clauses, params: likeParams } = buildWhereClause(false);
+    if (clauses.length) sql += " AND " + clauses.join(" AND ");
+    params.push(...likeParams);
+    sql += " ORDER BY importance DESC, created_at DESC LIMIT ?";
+    params.push(limit);
+    return db.prepare(sql).all(...params) as Memory[];
+  }
+
+  // ── 长查询（>= 3 chars）：FTS5 trigram MATCH + BM25 排序 ──
+  let sql = `
+    SELECT m.*,
+           (m.importance * 0.6 + COALESCE(memories_fts.rank, 0) * 0.4) AS combined_score
     FROM memories m
-    JOIN memories_fts mf ON mf.rowid = m.id
+    JOIN memories_fts ON memories_fts.rowid = m.id
     WHERE memories_fts MATCH ?
   `;
-  const ftsParams: unknown[] = [query];
+  const params: unknown[] = [query];
 
-  if (options?.mentorId !== undefined) {
-    ftsSql += " AND m.mentor_id = ?";
-    ftsParams.push(options.mentorId);
-  }
-  if (options?.personId !== undefined) {
-    ftsSql += " AND m.entities LIKE ?";
-    ftsParams.push(`%"${options.personId}"%`);
+  // 如果开启了 person 筛选，需要 JOIN entities LIKE（FTS5 无法筛 JSON）
+  const { clauses, params: ftsParams } = buildWhereClause(true);
+  if (clauses.length) {
+    sql += " AND " + clauses.join(" AND ");
+    params.push(...ftsParams);
   }
 
-  ftsSql += " ORDER BY combined_score DESC LIMIT ?";
-  ftsParams.push(limit);
+  sql += " ORDER BY combined_score DESC LIMIT ?";
+  params.push(limit);
 
-  return db.prepare(ftsSql).all(...ftsParams) as Memory[];
+  return db.prepare(sql).all(...params) as Memory[];
 }
 
 /**
- * 存储一条新记忆，同时同步写入 FTS5 索引。
+ * 存储一条新记忆，FTS5 索引由 INSERT trigger 自动同步。
  */
 export function storeMemory(input: StoreMemoryInput): Memory {
   const db = getDb();
@@ -95,7 +123,6 @@ export function storeMemory(input: StoreMemoryInput): Memory {
     input.importance ?? 5
   );
 
-  // 同步 FTS5 索引 — 使用 INSERT trigger 自动同步
   return db.prepare("SELECT * FROM memories WHERE id = ?").get(result.lastInsertRowid) as Memory;
 }
 
@@ -111,7 +138,6 @@ export function refineMemoriesFromConversation(
 ): Memory[] {
   const memories: Memory[] = [];
 
-  // 存为一条提炼后的综合记忆
   if (summary && summary.trim()) {
     const memory = storeMemory({
       source_conversation_id: conversationId,
@@ -119,7 +145,7 @@ export function refineMemoriesFromConversation(
       content: summary,
       category: "insight",
       entities: personIds.length > 0 ? personIds : undefined,
-      importance: 6, // 提炼出的记忆默认中高重要度
+      importance: 6,
     });
     memories.push(memory);
   }

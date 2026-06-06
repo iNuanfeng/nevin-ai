@@ -1,53 +1,66 @@
-# Nevin AI — Phase 0 人工抽查清单
+# Nevin AI — 人工抽查清单
 
-> 用途：需要肉眼在浏览器中确认的项，无法通过 curl/sqlite3 自动化验证  
-> 操作方式：打开 `http://localhost:3000`，在浏览器中逐项检查
+> 更新：2026-06-07 | 覆盖 Phase 0 + Phase 1
 
 ---
 
-## A. 页面渲染（首页）
+## 如何执行
+
+1. `npm run dev` 启动开发服务器
+2. 确保 DEEPSEEK_API_KEY 已设置（如果需要测试完整 SSE 流）
+3. 在浏览器中打开 `http://localhost:3000`
+4. 逐项检查
+
+---
+
+## A. 页面渲染（首页 — Phase 0）
 
 | # | 检查项 | 预期 | 结果 | 备注 |
 |---|--------|------|------|------|
-| A1 | 顶栏标题 | 左侧显示 "Nevin" 字样 | □ 通过 □ 失败 | 渐变文字效果 |
-| A2 | 顶栏右侧图标 | 搜索图标 + 头像圆形（N 字母）可用 | □ 通过 □ 失败 | |
-| A3 | 导师过滤器 | 横向可滚动，7个 chip | □ 通过 □ 失败 | "全部"高亮，"总管家"带 ⭐ |
-| A4 | 空状态 | 中间显示对话图标 + "还没有对话" + 提示文案 | □ 通过 □ 失败 | |
-| A5 | FAB 按钮 | 右下角 "+" 按钮，圆形深色 | □ 通过 □ 失败 | 悬停放大效果 |
-| A6 | Tailwind 样式 | 所有圆角、间距、颜色与设计稿一致 | □ 通过 □ 失败 | |
-| A7 | 滚动行为 | 页面内容超出时正常滚动，底部导航不遮挡 | □ 通过 □ 失败 | |
+| A1 | 顶栏标题 | "Nevin" 渐变文字 | □ 通过 □ 失败 | |
+| A2 | 搜索图标 + 头像 | 可见可点的图标 | □ 通过 □ 失败 | |
+| A3 | 导师过滤器 | 7 个横向滚动 chip，"全部"高亮 | □ 通过 □ 失败 | |
+| A4 | 空状态 | "还没有对话" | □ 通过 □ 失败 | |
+| A5 | FAB 按钮 | 右下角 "+" | □ 通过 □ 失败 | |
 
-## B. 页面渲染（其他页面）
+## B. PWA / Meta（Phase 0）
 
 | # | 检查项 | 预期 | 结果 | 备注 |
 |---|--------|------|------|------|
-| B1 | 页面 Title | 浏览器标签显示 "Nevin AI" | □ 通过 □ 失败 | |
-| B2 | 移动端视口 | 375-430px 宽度下布局不变形 | □ 通过 □ 失败 | Chrome DevTools 模拟 |
-| B3 | 字体渲染 | 中英文混合无乱码、无锯齿 | □ 通过 □ 失败 | |
+| B1 | Page Title | "Nevin AI" | □ 通过 □ 失败 | |
+| B2 | Viewport | 禁止缩放 + viewport-fit=cover | □ 通过 □ 失败 | |
+| B3 | 移动端适配 | 375-430px 布局不变形 | □ 通过 □ 失败 | |
 
-## C. PWA & Meta
+## C. API 响应（Phase 1 — 手动 curl 验证）
 
-| # | 检查项 | 预期 | 结果 | 备注 |
+| # | 检查项 | 预期 | 命令 | 结果 |
 |---|--------|------|------|------|
-| C1 | PWA Manifest | Chrome DevTools > Application > Manifest 有值 | □ 通过 □ 失败 | |
-| C2 | 添加到桌面 | 浏览器菜单出现 "添加到主屏幕" 选项 | □ 通过 □ 失败 | iOS Safari + Android Chrome |
-| C3 | 状态栏 | 移动端顶部状态栏白色背景 | □ 通过 □ 失败 | iOS Safari 测试 |
-| C4 | 页面缩放 | 双指缩放禁用 | □ 通过 □ 失败 | |
+| C1 | 导师列表 | 6 条，含 system_prompt | `curl localhost:3000/api/mentors` | □ 通过 □ 失败 |
+| C2 | 导师人设更新 | style_config 持久化 | `curl -X PUT -H 'Content-Type: application/json' -d '{"style_config":{"style":"测试"}}' localhost:3000/api/mentors/1` | □ 通过 □ 失败 |
+| C3 | 联系人 CRUD | 全生命周期正常 | 见阶段一测试脚本 | □ 通过 □ 失败 |
+| C4 | 对话列表 | 含 last_message 和 mentor_info | `curl localhost:3000/api/conversations` | □ 通过 □ 失败 |
+| C5 | SSE 流式 | event: chunk / event: done 格式 | `curl -X POST -H 'Content-Type: application/json' -d '{"conversationId":1,"content":"你好"}' localhost:3000/api/chat` | □ 通过 □ 失败 |
+| C6 | 记忆检索 | FTS5 命中 | `curl 'localhost:3000/api/memory?q=工作'` | □ 通过 □ 失败 |
+| C7 | 用户档案 | 自动创建空行 | `curl localhost:3000/api/profile` | □ 通过 □ 失败 |
 
-## D. 开发体验
+## D. 错误处理（手动验证）
 
-| # | 检查项 | 预期 | 结果 | 备注 |
-|---|--------|------|------|------|
-| D1 | HMR 热更新 | 修改 page.tsx 后浏览器自动刷新不报错 | □ 通过 □ 失败 | |
-| D2 | 终端无错误 | dev 模式下无明显 console error | □ 通过 □ 失败 | 浏览器 F12 Console |
-| D3 | Lint 通过 | `npm run lint` 0 错误 | □ 通过 □ 失败 | |
+| # | 场景 | 预期 | 结果 |
+|---|------|------|------|
+| D1 | POST /api/chat 无 conversationId | 400 + error | □ 通过 □ 失败 |
+| D2 | POST /api/persons 无 name | 400 + error | □ 通过 □ 失败 |
+| D3 | GET /api/conversations/99999 | 404 + error | □ 通过 □ 失败 |
+| D4 | DELETE /api/persons/99999 | 404 + error | □ 通过 □ 失败 |
+| D5 | Chat 无 API Key | SSE event: error 格式正确 | □ 通过 □ 失败 |
 
-## E. API 验证
+## E. 数据库（手动 sqlite3 验证）
 
-| # | 检查项 | 预期 | 结果 | 备注 |
-|---|--------|------|------|------|
-| E1 | GET /api/mentors | 直接浏览器访问，返回 JSON | □ 通过 □ 失败 | 检查 JSON 格式是否合法 |
-| E2 | 6 条导师数据 | JSON 中 length 为 6 | □ 通过 □ 失败 | |
+| # | 检查项 | 命令 | 结果 |
+|---|--------|------|------|
+| E1 | 所有表存在 | `sqlite3 data/nevin.db ".tables"` | □ 通过 □ 失败 |
+| E2 | mentors 6 行 | `sqlite3 data/nevin.db "SELECT COUNT(*) FROM mentors"` | □ 通过 □ 失败 |
+| E3 | 外键约束生效 | `sqlite3 data/nevin.db "PRAGMA foreign_keys"` → 1 | □ 通过 □ 失败 |
+| E4 | FTS5 存在 | `sqlite3 data/nevin.db "SELECT name FROM sqlite_master WHERE name='memories_fts'"` | □ 通过 □ 失败 |
 
 ---
 
@@ -56,8 +69,9 @@
 - **测试日期**：_________
 - **测试人**：_________
 - **浏览器**：_________
-- **设备**：_________
+- **DEEPSEEK_API_KEY 已设置**：□ 是 □ 否
+- **备注**：_________
 
 ---
 
-*此清单由测试脚本自动生成，测试日期 2026-06-06*
+*更新于 2026-06-07*
