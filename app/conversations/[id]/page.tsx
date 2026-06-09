@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Send, Image, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Plus, Send, Image, MoreHorizontal, Brain, Globe } from "lucide-react";
 import MessageBubble, { TypingIndicator, type MessageData } from "@/components/MessageBubble";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
 
@@ -37,9 +37,12 @@ export default function ChatPage() {
   const [allPersons, setAllPersons] = useState<PersonOption[]>([]);
   const [showPersonSelector, setShowPersonSelector] = useState(false);
   const [selectorSelectedIds, setSelectorSelectedIds] = useState<number[]>([]);
+  const [deepThink, setDeepThink] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
   const [titleGenerated, setTitleGenerated] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const swipeRef = useRef<{ startX: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -247,7 +250,14 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3">
+    <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3"
+    onTouchStart={(e) => { swipeRef.current = { startX: e.touches[0].clientX }; }}
+    onTouchEnd={(e) => {
+      if (!swipeRef.current) return;
+      const delta = e.changedTouches[0].clientX - swipeRef.current.startX;
+      if (delta > 80) router.push("/");
+      swipeRef.current = null;
+    }}>
       {/* Chat header */}
       <header className="flex items-center gap-2.5 px-4 py-2 border-b border-[#f0f0f0] flex-shrink-0">
         <button onClick={() => router.push("/")} className="text-[22px] text-[#333] border-none bg-transparent cursor-pointer p-0.5">
@@ -297,8 +307,21 @@ export default function ChatPage() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Toggle area */}
+      {(deepThink || webSearch) && (
+        <div className="flex items-center gap-1.5 px-3 py-1 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
+          {deepThink && <span className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-2 py-0.5 rounded-full">深度思考已开启</span>}
+          {webSearch && <span className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-2 py-0.5 rounded-full">联网搜索已开启</span>}
+        </div>
+      )}
       {/* Input area */}
       <div className="flex items-end gap-2 px-3 py-2 pb-3 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
+        <button onClick={() => setDeepThink(!deepThink)} className={`w-[34px] h-[34px] rounded-full flex items-center justify-center border-none cursor-pointer flex-shrink-0 ${deepThink ? "bg-[#1d1d1f] text-white" : "bg-[#f2f3f5] text-[#666]"}`} title="深度思考">
+          <Brain size={18} />
+        </button>
+        <button onClick={() => setWebSearch(!webSearch)} className={`w-[34px] h-[34px] rounded-full flex items-center justify-center border-none cursor-pointer flex-shrink-0 ${webSearch ? "bg-[#007aff] text-white" : "bg-[#f2f3f5] text-[#666]"}`} title="联网搜索">
+          <Globe size={18} />
+        </button>
         <button className="w-[34px] h-[34px] rounded-full bg-[#f2f3f5] flex items-center justify-center border-none cursor-pointer flex-shrink-0">
           <Image size={18} className="text-[#666]" />
         </button>

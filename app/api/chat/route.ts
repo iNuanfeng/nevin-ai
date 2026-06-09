@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { conversationId, content, images } = body;
+    const { conversationId, content, images, model } = body;
 
     if (!conversationId || !content) {
       return NextResponse.json(
@@ -30,11 +30,17 @@ export async function POST(req: NextRequest) {
         let closed = false;
 
         handleMessage(
-          { conversationId, content, images },
+          { conversationId, content, images, model },
           {
             onChunk: (text) => {
               if (!closed) {
                 const data = encoder.encode(`event: chunk\ndata: ${JSON.stringify({ content: text })}\n\n`);
+                controller.enqueue(data);
+              }
+            },
+            onReasoningChunk: (text) => {
+              if (!closed) {
+                const data = encoder.encode(`event: reasoning\ndata: ${JSON.stringify({ content: text })}\n\n`);
                 controller.enqueue(data);
               }
             },

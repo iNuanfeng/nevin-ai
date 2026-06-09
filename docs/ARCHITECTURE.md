@@ -778,3 +778,103 @@ profile                    ❌ 完全不受影响
 参见 PRD 第 13 节详细交互流程。
 前端左滑删除使用 `react-gesture-responder` 或原生 touch 事件实现，
 配合 3 秒 `setTimeout` 自动确认删除，toast 内提供撤销按钮。
+
+
+## 14. 深度思考（Reasoner）集成
+
+### 14.1 模型选择逻辑
+
+```
+mentor.style_config.model
+    │
+    ├── 未设置 → 默认使用 deepseek-chat
+    │
+    ├── "deepseek-reasoner"
+    │       ↓
+    │   lib/deepseek.ts 调用时：
+    │   model: "deepseek-reasoner"
+    │   messages 中包含 system prompt + user/assistant 交替
+    │   SSE 响应中额外解析 reasoning_content 字段
+    │       ↓
+    │   前端收到 reasoning_content → 先以灰色/折叠框展示思考过程
+    │   前端收到 content → 正常展示答案
+    │
+    └── "deepseek-chat"
+            ↓
+        lib/deepseek.ts 调用时：
+        model: "deepseek-chat"
+        无 reasoning_content
+```
+
+### 14.2 API 差异
+
+```typescript
+// deepseek.ts
+async function chatStream(
+  messages: Message[],
+  model: 'deepseek-chat' | 'deepseek-reasoner',
+  onChunk: (text: string) => void,
+  onReasoning?: (text: string) => void  // reasoner 的推理过程回调
+) {
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: true
+    })
+  });
+
+  const reader = response.body!.getReader();
+  // SSE 解析：
+  // 当 model=deepseek-reasoner 时：
+  //   delta.reasoning_content → 调用 onReasoning
+  //   delta.content → 调用 onChunk
+  // 当 model=deepseek-chat 时：
+  //   delta.content → 调用 onChunk
+}
+```
+
+### 14.3 前端展示
+
+```
+┌──────────────────────────────────┐
+│  💭 思考过程                     │  ← 灰色/折叠框，可展开收起
+│  用户从秒回到几小时回复           │
+│  → 可能是关系进入新阶段            │
+│  → 也可能是她在自我保护           │
+│  → 最不应该做的是质问             │
+│  → 建议表达关心但不施压           │
+├──────────────────────────────────┤
+│                                  │
+│  ❤️ 情场顾问的回复                 │
+│  这种变化通常不是单一的"你哪里     │
+│  做错了"...                       │
+└──────────────────────────────────┘
+```
+
+### 14.4 配置存储
+
+```json
+// mentors 表 style_config 字段扩展
+{
+  "style": "风趣痞帅，像童锦程，说话带点撩",
+  "model": "deepseek-reasoner",
+  "rules": ["关键建议时要沉稳认真", "多用比喻和生动的例子"],
+  "allow_web_search": false
+}
+```
+
+### 14.5 导师默认 model 表
+
+| 导师 | category | model |
+|------|---------|-------|
+| 总管家 | life_manager | deepseek-chat |
+| 职场军师 | workplace | deepseek-reasoner |
+| 情场顾问 | romance | deepseek-reasoner |
+| 家庭调解师 | family | deepseek-chat |
+| 摄影导师 | photography | deepseek-chat |
+| 成长教练 | growth | deepseek-reasoner |

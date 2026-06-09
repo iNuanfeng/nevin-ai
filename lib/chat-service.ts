@@ -1,4 +1,4 @@
-import { ChatMessage, chatStream, analyze } from "@/lib/deepseek";
+import { ChatMessage, chatStream, reasonerStream, analyze } from "@/lib/deepseek";
 import { getProfile, updateProfile } from "@/lib/profile-service";
 import { getMentorById, Mentor } from "@/lib/mentor-service";
 import { getPersonsByConversation, appendPersonInsight } from "@/lib/person-service";
@@ -18,6 +18,7 @@ export interface HandleMessageInput {
   conversationId: number;
   content: string;
   images?: string[];
+  model?: string;
 }
 
 export interface HandleMessageCallbacks {
@@ -29,6 +30,7 @@ export interface HandleMessageCallbacks {
   onMemoryStored?: (count: number) => void;
   onPersonUpdated?: (personId: number, field: string, hasNew: boolean) => void;
   /** 流式错误 */
+  onReasoningChunk?: (text: string) => void;
   onError: (error: Error) => void;
 }
 
@@ -178,7 +180,7 @@ export async function handleMessage(
 
         // 10. 异步后处理
         if (!conversation.title) {
-          generateTitle(conversationId, fullContent, mentor.name);
+          generateTitle(conversationId, recentMessages, fullContent, mentor.name);
         }
         generateSummary(conversationId, recentMessages, fullContent);
         postProcessConversation(conversationId, mentor.id, personIds, recentMessages, fullContent, callbacks);
@@ -214,14 +216,19 @@ type ChatMessageContent = string | Array<{ type: string; text?: string; image_ur
 /**
  * AI 自动生成对话标题（触发时机：首轮 AI 回复后）
  */
-async function generateTitle(conversationId: number, firstResponse: string, mentorName: string): Promise<void> {
+async function generateTitle(conversationId: number, messages: Message[], aiResponse: string, mentorName: string): Promise<void> {
   try {
-    const title = firstResponse.slice(0, 30).replace(/[\n\r]/g, " ").trim();
-    if (title.length > 3) {
-      updateConversationTitle(conversationId, `${mentorName}的建议`);
+    const userMsg = messages.find(m => m.role === "user")?.content.slice(0, 200) || aiResponse.slice(0, 200);
+    const title = await analyze(
+      "Generate a concise 2-6 word Chinese title for this conversation. Output ONLY the title.",
+      [{ role: "user", content: userMsg }]
+    );
+    const clean = title.trim();
+    if (clean && clean.length > 1 && clean.length < 40) {
+      updateConversationTitle(conversationId, clean);
     }
   } catch {
-    // Silent fail — 标题不重要到需要报错
+    // Silent fail
   }
 }
 

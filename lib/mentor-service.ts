@@ -15,6 +15,7 @@ export interface MentorStyleConfig {
   style?: string;
   rules?: string[];
   tone?: string;
+  model?: string;
 }
 
 /**

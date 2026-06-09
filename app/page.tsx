@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, ArrowUp, Download, X, Check, Archive, RotateCcw } from "lucide-react";
+import { Search, Plus, ArrowUp, Download, X, Check, Archive, RotateCcw, MessageSquare, User, BookOpen } from "lucide-react";
 
 import BottomNav, { type TabId } from "@/components/BottomNav";
 import MentorFilter from "@/components/MentorFilter";
@@ -48,6 +48,8 @@ export default function HomePage() {
   const [showSearch, setShowSearch] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
 
   // Persons view
   const [personSearch, setPersonSearch] = useState("");
@@ -301,6 +303,20 @@ export default function HomePage() {
     return true;
   });
 
+  // ── 搜索防抖 ──
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (!searchTerm.trim()) { setSearchResults(null); setSearching(false); return; }
+      setSearching(true);
+      try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(searchTerm)}`);
+        setSearchResults(await r.json());
+      } catch {}
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
   // ──── RENDER ────
   return (
     <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto relative sm:rounded-2xl sm:shadow-lg sm:my-3">
@@ -330,6 +346,39 @@ export default function HomePage() {
                 placeholder="搜索对话、联系人…"
                 className="w-full px-3.5 py-2 rounded-xl bg-[#f2f3f5] text-sm outline-none border-none"
               />
+              {searching && <div className="text-xs text-[#aeaeb2] px-1 pt-2">搜索中…</div>}
+              {searchResults && !searching && (() => {
+                const hasAny = searchResults.conversations?.length > 0 || searchResults.persons?.length > 0 || searchResults.memories?.length > 0;
+                if (!hasAny) return <div className="text-xs text-[#aeaeb2] px-1 pt-2">无结果</div>;
+                return (
+                  <div className="space-y-2 pt-2 max-h-[40vh] overflow-y-auto">
+                    {searchResults.conversations?.length > 0 && (
+                      <div>
+                        <div className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider flex items-center gap-1 mb-0.5"><MessageSquare size={12} /> 对话</div>
+                        {searchResults.conversations.map((c: any) => (
+                          <div key={c.id} onClick={() => { window.location.href = `/conversations/${c.id}`; }} className="py-1 px-1 text-[13px] cursor-pointer rounded hover:bg-[#f2f3f5]">{c.title || c.mentor_name}</div>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.persons?.length > 0 && (
+                      <div>
+                        <div className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider flex items-center gap-1 mb-0.5"><User size={12} /> 联系人</div>
+                        {searchResults.persons.map((p: any) => (
+                          <div key={p.id} onClick={() => { setShowSearch(false); setActiveTab("persons"); }} className="py-1 px-1 text-[13px] cursor-pointer rounded hover:bg-[#f2f3f5]">{p.name}{p.relationship ? `（${p.relationship}）` : ""}</div>
+                        ))}
+                      </div>
+                    )}
+                    {searchResults.memories?.length > 0 && (
+                      <div>
+                        <div className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider flex items-center gap-1 mb-0.5"><BookOpen size={12} /> 记忆</div>
+                        {searchResults.memories.map((m: any) => (
+                          <div key={m.id} className="py-1 px-1 text-[13px] text-[#555]">{m.content.slice(0, 50)}…</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
