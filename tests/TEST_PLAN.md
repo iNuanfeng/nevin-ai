@@ -268,3 +268,53 @@
 - **建议修复时机**：Phase 3（联系人档案丰富/记忆系统迭代）
 - **修复思路**：在 MCP（记忆检索注入）环节加过滤，取到 `entities` 后校验 `person_id` 是否仍存在于 `persons` 表，不存在则跳过该记忆或过滤掉该 ID
 - **严重性**：非 blocking，不影响当前功能
+
+---
+
+## Phase 3 测试范围
+
+### P0 — 核心体验
+
+| # | 功能 | 测试项 | 预期 | 状态 |
+|---|------|--------|------|------|
+| 3.0.1 | Reasoner 集成 | `lib/deepseek.ts` 的 `reasonerStream()` 和 SSE 的 `reasoning_content` 解析 | 调用 `deepseek-reasoner` 模型，SSE 返回 `event: reasoning` 携带思考过程 | ⚠️ Bug |
+| 3.0.1 | Reasoner 集成 | `lib/chat-service.ts` 根据 `input.model` 或 mentor 配置选择模型 | 当 `model === "deepseek-reasoner"` 时调用 `reasonerStream()` 而非 `chatStream()` | ❌ 永远走 chatStream |
+| 3.0.1 | Reasoner 集成 | 前端 `deepThink` 开关在 fetch body 中传递 model 字段 | `body: { conversationId, content, model: deepThink ? "deepseek-reasoner" : undefined }` | ❌ 未传 model |
+| 3.0.1 | Reasoner 集成 | 前端 SSE 解析器处理 `event: reasoning` | 将 `data: { content }` 渲染为灰色可折叠思考框 | ❌ 未处理 |
+| 3.0.2 | 对话标题自动生成 | 首轮 SSE done 后异步调用非流式 DeepSeek 生成 2-6 字中文标题 | `conversations.title` 被更新为有意义的标题 | ✅ |
+| 3.0.3 | 统一搜索 | `GET /api/search?q=关键词` 返回四类分组 | 返回 `{ conversations, persons, memories }` 各最多 10 条 | ✅ |
+| 3.0.3 | 统一搜索 | 前端搜索面板展示分组结果 | 搜索面板显示四类分组，每条可点击 | ✅ |
+| 3.0.4 | 记忆提炼 | SSE done 后调用 DeepSeek analyze 分析对话 → 写入 memories | `memories` 表增加新记录 | ✅ |
+| 3.0.5 | 联系人详情页 | 通讯录中点击联系人进入专用详情页面/弹窗 | 展示完整档案（姓名/关系/背景/性格/动态/策略等） | ❌ 无 UI |
+| 3.0.6 | 错误处理 | 5 种场景：API 超时 / Key 无效 / 网络断开 / 通用错误 / 空状态 | 每种场景正确显示对应的错误提示 | ✅ |
+
+### P1 — 体验增强
+
+| # | 功能 | 测试项 | 预期 | 状态 |
+|---|------|--------|------|------|
+| 3.1.1 | 图片上传 | 前端图片按钮可点击触发拍照/相册选择 | `hidden input[type=file]` 绑定 `onClick` | ❌ 按钮无 onClick |
+| 3.1.1 | 图片上传 | `POST /api/upload` 接收文件存到 `data/uploads/` | 返回 `{ url: "/uploads/xxx.jpg" }` | ✅ 后端就绪，前端未联调 |
+| 3.1.2 | DeepSeek VL | 发送带图片消息时 content 格式切换为 `ContentPart[]` | `{ type: "text" }` + `{ type: "image_url" }` | ✅ 接口已支持 |
+| 3.1.3 | 备份下载 | `GET /api/backup` 返回 ZIP 或 DB 文件 | `Content-Disposition: attachment` 流式下载 | ✅ |
+| 3.1.4 | 骨架屏/加载态 | 对话列表骨架屏 / 发送 disabled / 打字动画 | 各状态正确 | ✅ |
+| 3.1.5 | 右滑返回 | 聊天页触摸右滑返回首页 | onTouchStart/Move/End 检测正 delta | ⬜ 未实现 |
+| 3.1.6 | 深度思考开关 | 输入区上方"深度思考"开关 | 覆盖当前对话 model，不影响导师配置 | ⚠️ 前端 toggle 有，后端未对接 |
+| 3.1.7 | 联网搜索开关 | 输入区上方"联网搜索"开关 | 仅当前输入参与搜索，不传上下文 | ⬜ 未实现 |
+
+### 已知待修复问题
+
+| # | 问题 | 影响 | 涉及文件 |
+|---|------|------|---------|
+| R1 | `chat-service.ts` 永远调用 `chatStream`，从不用 `reasonerStream` | Reasoner 模型完全不生效 | `lib/chat-service.ts:169` |
+| R2 | 前端 fetch body 不传 `model` | 无法通知后端使用 reasoner | `app/conversations/[id]/page.tsx:114` |
+| R3 | 前端 SSE 解析器不处理 `event: reasoning` | reasoning_content 被混入普通内容或忽略 | `app/conversations/[id]/page.tsx:125-160` |
+| R4 | 图片上传按钮无 `onClick` | 无法选择图片 | `app/conversations/[id]/page.tsx:326` |
+| R5 | 联系人详情无 UI | 无法查看完整档案 | 缺少 `components/PersonDetail.tsx` 或弹窗 |
+| R6 | 右滑返回未实现 | ROADMAP 3.1.5 未交付 | ⬜ |
+| R7 | 联网搜索开关未实现 | ROADMAP 3.1.7 未交付 | ⬜ |
+
+### 测试方法
+
+- 自动化验证：API 端点通过 curl / server terminal 日志确认
+- 代码审查：核验每个功能的后端逻辑和前端集成
+- 需用户手动验收：MANUAL_CHECKLIST.md 列出需浏览器确认的项

@@ -24,15 +24,18 @@ function getApiKey(): string {
   return key;
 }
 
+/**
+ * Parse SSE stream for non-reasoner models.
+ * For reasoner, we use non-streaming API instead (see streamRequest).
+ */
 function parseSSE(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   decoder: TextDecoder,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let buffer = "";
     let fullContent = "";
-    let fullReasoning = "";
 
     const pump = async () => {
       try {
@@ -53,7 +56,6 @@ function parseSSE(
                 const json = JSON.parse(trimmed.slice(6));
                 const delta = json.choices?.[0]?.delta;
                 if (delta?.reasoning_content) {
-                  fullReasoning += delta.reasoning_content;
                   callbacks.onReasoningChunk?.(delta.reasoning_content);
                 }
                 if (delta?.content) {
@@ -70,7 +72,6 @@ function parseSSE(
             const json = JSON.parse(buffer.trim().replace(/^data: /, ""));
             const delta = json.choices?.[0]?.delta;
             if (delta?.reasoning_content) {
-              fullReasoning += delta.reasoning_content;
               callbacks.onReasoningChunk?.(delta.reasoning_content);
             }
             if (delta?.content) {
@@ -88,6 +89,12 @@ function parseSSE(
   });
 }
 
+/**
+ * Stream a chat completion request to DeepSeek API.
+ * For deepseek-reasoner, uses non-streaming API (stream: false) because 
+ * streaming does not return reasoning_content.
+ * For other models, uses standard SSE streaming.
+ */
 async function streamRequest(
   model: string,
   messages: ChatMessage[],
@@ -96,6 +103,55 @@ async function streamRequest(
 ): Promise<void> {
   const apiKey = getApiKey();
   try {
+    // ── Non-streaming path for deepseek-reasoner ──
+    // deepseek-reasoner does not return reasoning_content in streaming mode.
+    // We use non-streaming API and split content into chunks for streaming UX.
+    if (model.includes("reasoner")) {
+      const nBody: Record<string, unknown> = {
+        model,
+        messages,
+        stream: false,
+        max_tokens: 4096,
+      };
+
+      const response = await fetch(DEEPSEEK_BASE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(nBody),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "unknown error");
+        throw new Error(`DeepSeek error (${response.status}): ${errText}`);
+      }
+
+      const data = await response.json();
+      const msg = data.choices?.[0]?.message;
+
+      if (msg?.reasoning_content) {
+        const reasoning = msg.reasoning_content as string;
+        const reasoningChunkSize = Math.max(1, Math.ceil(reasoning.length / 8));
+        for (let i = 0; i < reasoning.length; i += reasoningChunkSize) {
+          callbacks.onReasoningChunk?.(reasoning.slice(i, i + reasoningChunkSize));
+        }
+      }
+
+      if (msg?.content) {
+        const text = msg.content;
+        const chunkSize = Math.max(1, Math.ceil(text.length / 5));
+        for (let i = 0; i < text.length; i += chunkSize) {
+          callbacks.onChunk(text.slice(i, i + chunkSize));
+        }
+      }
+
+      callbacks.onDone(msg?.content || "");
+      return;
+    }
+
+    // ── Streaming path for chat models ──
     const body: Record<string, unknown> = {
       model,
       messages,
@@ -109,7 +165,10 @@ async function streamRequest(
 
     const response = await fetch(DEEPSEEK_BASE_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(body),
     });
 
@@ -120,8 +179,8 @@ async function streamRequest(
 
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
-    await parseSSE(reader, decoder, callbacks);
-    callbacks.onDone("");
+    const fullContent = await parseSSE(reader, decoder, callbacks);
+    callbacks.onDone(fullContent);
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     callbacks.onError(error);
@@ -130,16 +189,11 @@ async function streamRequest(
 
 export async function chatStream(
   messages: ChatMessage[],
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  extra?: Record<string, unknown>,
+  model?: string
 ): Promise<void> {
-  return streamRequest("deepseek-chat", messages, callbacks);
-}
-
-export async function reasonerStream(
-  messages: ChatMessage[],
-  callbacks: StreamCallbacks
-): Promise<void> {
-  return streamRequest("deepseek-reasoner", messages, callbacks);
+  return streamRequest(model || "deepseek-chat", messages, callbacks, extra);
 }
 
 export interface DeepSeekMessage {
@@ -157,7 +211,10 @@ export async function analyze(
 
   const response = await fetch(DEEPSEEK_BASE_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
       model,
       messages: [{ role: "system", content: systemPrompt }, ...messages],

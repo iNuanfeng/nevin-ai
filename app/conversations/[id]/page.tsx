@@ -33,16 +33,35 @@ export default function ChatPage() {
   const [inputText, setInputText] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
+  const [streamReasoning, setStreamReasoning] = useState("");
+  const [showReasoning, setShowReasoning] = useState(true);
   const [contacts, setContacts] = useState<any[]>([]);
   const [allPersons, setAllPersons] = useState<PersonOption[]>([]);
   const [showPersonSelector, setShowPersonSelector] = useState(false);
   const [selectorSelectedIds, setSelectorSelectedIds] = useState<number[]>([]);
   const [deepThink, setDeepThink] = useState(false);
-  const [webSearch, setWebSearch] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
   const [titleGenerated, setTitleGenerated] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const swipeRef = useRef<{ startX: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.url) {
+        // For now just show the URL as a message
+        setInputText(prev => prev + ` [图片](${data.url}) `);
+      }
+    } catch {}
+    e.target.value = "";
+  };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = useCallback(() => {
@@ -106,12 +125,13 @@ export default function ChatPage() {
     setInputText("");
     setStreaming(true);
     setStreamContent("");
+    setStreamReasoning("");
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, content: text }),
+        body: JSON.stringify({ conversationId, content: text, model: deepThink ? "deepseek-reasoner" : undefined }),
       });
 
       if (!response.ok) {
@@ -123,6 +143,8 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       let buffer = "";
       let fullContent = "";
+      let currentEvent = "chunk";
+      let reasoningContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -136,31 +158,41 @@ export default function ChatPage() {
           const trimmed = line.trim();
           if (!trimmed) continue;
 
-          if (trimmed.startsWith("event: chunk")) {
-            // Next line has the data
+          // Track SSE event type
+          if (trimmed.startsWith("event: ")) {
+            currentEvent = trimmed.slice(7).trim();
             continue;
           }
+
           if (trimmed.startsWith("data: ")) {
             try {
               const json = JSON.parse(trimmed.slice(6));
+
+              // Reasoning content
+              if (currentEvent === "reasoning") {
+                reasoningContent += json.content || "";
+                setStreamReasoning(reasoningContent);
+                continue;
+              }
+
+              // Normal content
               if (json.content) {
                 fullContent += json.content;
                 setStreamContent(fullContent);
               }
+
+              // Done event
               if (json.conversationId && json.messageId) {
-                // done event
                 setStreaming(false);
                 setStreamContent("");
-                // Reload messages to get the saved assistant message
                 const msgRes = await fetch(`/api/conversations/${conversationId}`);
                 const msgData = await msgRes.json();
                 setMessages(msgData.messages || []);
               }
             } catch {
-              // Might be JSON with special chars, skip
+              // Skip malformed JSON
             }
           }
-          if (trimmed === "event: done") continue;
         }
       }
     } catch (err: any) {
@@ -250,14 +282,25 @@ export default function ChatPage() {
   }
 
   return (
+    <>
     <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3"
-    onTouchStart={(e) => { swipeRef.current = { startX: e.touches[0].clientX }; }}
-    onTouchEnd={(e) => {
-      if (!swipeRef.current) return;
-      const delta = e.changedTouches[0].clientX - swipeRef.current.startX;
-      if (delta > 80) router.push("/");
-      swipeRef.current = null;
-    }}>
+style={{
+          transform: `translateX(${Math.min(swipeX > 0 ? swipeX : 0, 180)}px)`,
+          transition: swipeX === 0 ? "transform 0.3s ease" : "none",
+        }}
+        onTouchStart={(e) => { swipeRef.current = { startX: e.touches[0].clientX }; setSwipeX(0); }}
+        onTouchMove={(e) => {
+          if (!swipeRef.current) return;
+          const delta = e.touches[0].clientX - swipeRef.current.startX;
+          if (delta > 0) setSwipeX(delta * 0.7);
+        }}
+        onTouchEnd={(e) => {
+          if (!swipeRef.current) return;
+          const delta = e.changedTouches[0].clientX - swipeRef.current.startX;
+          if (delta > 100) router.push("/");
+          else setSwipeX(0);
+          swipeRef.current = null;
+        }}>
       {/* Chat header */}
       <header className="flex items-center gap-2.5 px-4 py-2 border-b border-[#f0f0f0] flex-shrink-0">
         <button onClick={() => router.push("/")} className="text-[22px] text-[#333] border-none bg-transparent cursor-pointer p-0.5">
@@ -302,27 +345,53 @@ export default function ChatPage() {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+        {streamReasoning && (
+          <div className="self-start max-w-[85%]">
+            <div
+              onClick={() => setShowReasoning(!showReasoning)}
+              className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-3 py-1 rounded-t-lg cursor-pointer select-none flex items-center gap-1"
+            >
+              <span className="font-medium">{showReasoning ? "▼" : "▶"}</span>
+              深度思考过程
+            </div>
+            {showReasoning && (
+              <div className="text-[12px] text-[#666] bg-[#f8f9fb] px-3 py-2 leading-relaxed border-t border-[#e8e8ed] rounded-b-lg whitespace-pre-wrap">
+                {streamReasoning}
+              </div>
+            )}
+          </div>
+        )}
         {streaming && <MessageBubble message={{ id: 0, role: "assistant", content: streamContent || " ", created_at: "" }} />}
-        {streaming && !streamContent && <TypingIndicator />}
+        {streaming && !streamContent && !streamReasoning && <TypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Toggle area */}
-      {(deepThink || webSearch) && (
-        <div className="flex items-center gap-1.5 px-3 py-1 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
-          {deepThink && <span className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-2 py-0.5 rounded-full">深度思考已开启</span>}
-          {webSearch && <span className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-2 py-0.5 rounded-full">联网搜索已开启</span>}
-        </div>
-      )}
+      {/* Toggle row */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
+        <button onClick={() => setDeepThink(!deepThink)}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer border-none transition-colors ${
+            deepThink ? "bg-[#1d1d1f] text-white" : "bg-[#f2f3f5] text-[#555]"
+          }`}>
+          <Brain size={13} />
+          深度思考
+        </button>
+        <button onClick={() => { 
+            const d = document.createElement("div");
+            d.className = "fixed bottom-24 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md text-white px-4 py-3 rounded-xl text-sm z-30 toast";
+            d.textContent = "联网搜索功能即将推出";
+            document.body.appendChild(d);
+            setTimeout(() => d.remove(), 2000);
+          }}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer border-none bg-[#f2f3f5] text-[#555]">
+          <Globe size={13} />
+          联网搜索
+        </button>
+        <span className="text-[10px] text-[#aeaeb2] ml-auto">当前对话有效</span>
+      </div>
       {/* Input area */}
       <div className="flex items-end gap-2 px-3 py-2 pb-3 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
-        <button onClick={() => setDeepThink(!deepThink)} className={`w-[34px] h-[34px] rounded-full flex items-center justify-center border-none cursor-pointer flex-shrink-0 ${deepThink ? "bg-[#1d1d1f] text-white" : "bg-[#f2f3f5] text-[#666]"}`} title="深度思考">
-          <Brain size={18} />
-        </button>
-        <button onClick={() => setWebSearch(!webSearch)} className={`w-[34px] h-[34px] rounded-full flex items-center justify-center border-none cursor-pointer flex-shrink-0 ${webSearch ? "bg-[#007aff] text-white" : "bg-[#f2f3f5] text-[#666]"}`} title="联网搜索">
-          <Globe size={18} />
-        </button>
-        <button className="w-[34px] h-[34px] rounded-full bg-[#f2f3f5] flex items-center justify-center border-none cursor-pointer flex-shrink-0">
+        <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileSelect} />
+        <button onClick={() => fileInputRef.current?.click()} className="w-[34px] h-[34px] rounded-full bg-[#f2f3f5] flex items-center justify-center border-none cursor-pointer flex-shrink-0">
           <Image size={18} className="text-[#666]" />
         </button>
         <textarea
@@ -353,5 +422,9 @@ export default function ChatPage() {
         onConfirm={handleConfirmPersons}
       />
     </div>
+      {swipeX > 0 && (
+        <div className="fixed inset-0 bg-black pointer-events-none" style={{ opacity: Math.min(swipeX / 300, 0.3) }} />
+      )}
+    </>
   );
 }

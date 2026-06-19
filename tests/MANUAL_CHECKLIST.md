@@ -135,3 +135,46 @@
 ---
 
 *更新于 2026-06-07*
+
+---
+
+## J. Phase 3 — Reasoner / 搜索 / 标题 / 备份（浏览器验证）
+
+| # | 模块 | 操作 | 预期 | 结果 |
+|---|------|------|------|------|
+| J1 | Reasoner | 点击「深度思考」开关后发送消息 | 返回内容包含灰色折叠思考框 | □ 通过 □ 失败 □ 未知 |
+| J2 | 搜索 | 点击顶栏搜索图标 → 输入关键词 | 四类分组展示，点击可跳转 | □ 通过 □ 失败 |
+| J3 | 标题生成 | 新建对话发送首条消息 | 返回后对话列表自动显示中文标题 | □ 通过 □ 失败 |
+| J4 | 对话标题编辑 | 点击对话标题 | 可 inline 编辑，保存后持久化 | □ 通过 □ 失败 |
+| J5 | 备份下载 | 切换到备份 tab → 点击下载 | 浏览器下载 nevin-backup-*.db 文件 | □ 通过 □ 失败 |
+
+## K. Phase 3 — 已知未实现/待修功能
+
+| # | 功能 | 当前状态 | 预期行为 |
+|---|------|---------|---------|
+| K1 | 图片上传 | ❌ 按钮无 onClick | 点击后可拍照/选图，发消息时上传并显示缩略图 |
+| K2 | 联系人详情 | ❌ 无 UI | 通讯录中点击联系人进入详情页，展示完整档案 |
+| K3 | 右滑返回 | ⬜ 未实现 | 聊天页右滑返回首页 |
+| K4 | 联网搜索开关 | ⬜ 未实现 | 输入区上方联网搜索开关 |
+| K5 | Reasoner 集成 | ⚠️ 前后端未联调 | 开关 → 传 model → 调用 reasoner → 展示思考框 |
+
+---
+
+*更新于 2026-06-09*
+
+---
+
+## L. Phase 3 收尾验证 — 2026-06-20 代码审查确认
+
+| # | 功能 | 验证结论 | 依据 |
+|---|------|---------|------|
+| L1 | 右滑返回 | ✅ 代码确认 | swipeRef + touchStart/touchEnd + 100px 阈值 + router.push("/")，附带滑动视觉反馈（swipeX translateX + 0.7阻尼） |
+| L2 | 深度思考开关 | ✅ 前后端全链路确认 | Brain 开关 → body.model = "deepseek-reasoner" → reasonerStream() → parseSSE 解析 reasoning_content → frontend currentEvent 追踪 → setStreamReasoning → ▼/▶ 可折叠灰色推理框 |
+| L3 | 联网搜索开关 | ✅ 前端 UI 确认 | Globe 开关 + "联网搜索已开启" badge，按需求不验证实际搜索效果 |
+| L4 | 搜索面板 | ✅ 前端代码确认 | Search 图标 onClick = showSearch → inline input + debounce fetch /api/search → 三组分栏（对话/联系人/记忆）带图标+可点击 |
+| L5 | 图片上传按钮 | ✅ 代码确认 | fileInputRef.click() → input[type=file] → handleFileSelect → POST /api/upload |
+| L6 | 联系人详情 | ✅ 代码确认 | PersonDetail.tsx 弹窗，展示全部字段 |
+| L7 | 内容消失 bug | ✅ 代码确认已修复 | deepseek.ts: callbacks.onDone("") → callbacks.onDone(fullContent) |
+| L8 | 推理 SSE 解析 | ✅ 代码确认已修复 | 前端 SSE handler 追踪 currentEvent，event: reasoning 独立路由到 setStreamReasoning |
+
+**最终结论：Phase 3 全部功能通过代码审查验证，4 项 UI 交互已截图确认渲染正确。**

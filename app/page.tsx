@@ -10,6 +10,7 @@ import ConversationList, { type ConversationItemData } from "@/components/Conver
 import MentorPicker, { type MentorOption } from "@/components/MentorPicker";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
 import MentorSettingsView from "@/components/MentorSettings";
+import PersonDetail from "@/components/PersonDetail";
 
 const REL_COLORS: Record<string, string> = {
   colleague: "linear-gradient(135deg,#667eea,#764ba2)",
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [toastAction, setToastAction] = useState<(() => void) | null>(null);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [detailPerson, setDetailPerson] = useState<any>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<any>(null);
@@ -449,7 +451,7 @@ export default function HomePage() {
                 >
                   {(p.name || "?")[0]}
                 </div>
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleEditPerson(p)}>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailPerson(p)}>
                   <div className="text-[15px] font-semibold text-[#1d1d1f]">{p.name}</div>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {p.relationship && (
@@ -679,6 +681,15 @@ export default function HomePage() {
             </button>
           )}
         </div>
+      )}
+
+      {/* ── Person Detail ── */}
+      {detailPerson && (
+        <PersonDetail
+          person={detailPerson}
+          onClose={() => setDetailPerson(null)}
+          onEdit={() => { const p = detailPerson; setDetailPerson(null); handleEditPerson(p); }}
+        />
       )}
 
       {/* ── Bottom Nav ── */}

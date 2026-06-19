@@ -1,4 +1,4 @@
-import { ChatMessage, chatStream, reasonerStream, analyze } from "@/lib/deepseek";
+import { ChatMessage, chatStream, analyze } from "@/lib/deepseek";
 import { getProfile, updateProfile } from "@/lib/profile-service";
 import { getMentorById, Mentor } from "@/lib/mentor-service";
 import { getPersonsByConversation, appendPersonInsight } from "@/lib/person-service";
@@ -153,23 +153,49 @@ export async function handleMessage(
     // 6. 组装 System Prompt
     const systemPrompt = buildSystemPrompt(profile, mentor, persons, memories);
 
-    // 7. 组装消息列表
-    const deepseekMessages: ChatMessage[] = [
-      { role: "system", content: systemPrompt },
-      ...recentMessages.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-    ];
+    // 读取导师默认 model 配置
+    let mentorConfig: { model?: string } = {};
+    if (mentor.style_config) {
+      try { mentorConfig = JSON.parse(mentor.style_config); } catch {}
+    }
+    const defaultModel = mentorConfig.model || "deepseek-chat";
+    const activeModel = input.model || defaultModel;
+    const useReasoner = activeModel === "deepseek-reasoner";
+    // 7. 组装消息列表（reasoner 不支持 system role）
+    let deepseekMessages: ChatMessage[];
+    if (useReasoner) {
+      deepseekMessages = [
+        { role: "user", content: systemPrompt },
+        ...recentMessages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ];
+    } else {
+      deepseekMessages = [
+        { role: "system", content: systemPrompt },
+        ...recentMessages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+      ];
+    }
     // Note: image messages supported by ChatMessage type, full multi-modal in Phase 3n
 
 
-    // 8. 调用 DeepSeek 流式
+    // 8. 调用 DeepSeek 流式（按模型选择 reasoner 或 chat）
     let fullResponse = "";
+    let fullReasoning = "";
+    const thinkingExtra = useReasoner ? {} : {};
+    const streamModel = useReasoner ? "deepseek-reasoner" : "deepseek-chat";
     await chatStream(deepseekMessages, {
       onChunk: (text) => {
         fullResponse += text;
         callbacks.onChunk(text);
+      },
+      onReasoningChunk: (text) => {
+        fullReasoning += text;
+        callbacks.onReasoningChunk?.(text);
       },
       onDone: async (fullContent) => {
         fullResponse = fullContent;
@@ -188,7 +214,7 @@ export async function handleMessage(
       onError: (error) => {
         callbacks.onError(error);
       },
-    });
+    }, thinkingExtra, streamModel);
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     callbacks.onError(error);
