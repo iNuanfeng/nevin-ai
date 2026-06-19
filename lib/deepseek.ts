@@ -25,8 +25,8 @@ function getApiKey(): string {
 }
 
 /**
- * Parse SSE stream for non-reasoner models.
- * For reasoner, we use non-streaming API instead (see streamRequest).
+ * Parse SSE stream from DeepSeek chat completions.
+ * For reasoner/thinking models, reasoning_content arrives before content.
  */
 function parseSSE(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -91,9 +91,7 @@ function parseSSE(
 
 /**
  * Stream a chat completion request to DeepSeek API.
- * For deepseek-reasoner, uses non-streaming API (stream: false) because 
- * streaming does not return reasoning_content.
- * For other models, uses standard SSE streaming.
+ * Reasoner/thinking models stream reasoning_content first, then content.
  */
 async function streamRequest(
   model: string,
@@ -103,55 +101,6 @@ async function streamRequest(
 ): Promise<void> {
   const apiKey = getApiKey();
   try {
-    // ── Non-streaming path for deepseek-reasoner ──
-    // deepseek-reasoner does not return reasoning_content in streaming mode.
-    // We use non-streaming API and split content into chunks for streaming UX.
-    if (model.includes("reasoner")) {
-      const nBody: Record<string, unknown> = {
-        model,
-        messages,
-        stream: false,
-        max_tokens: 4096,
-      };
-
-      const response = await fetch(DEEPSEEK_BASE_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(nBody),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "unknown error");
-        throw new Error(`DeepSeek error (${response.status}): ${errText}`);
-      }
-
-      const data = await response.json();
-      const msg = data.choices?.[0]?.message;
-
-      if (msg?.reasoning_content) {
-        const reasoning = msg.reasoning_content as string;
-        const reasoningChunkSize = Math.max(1, Math.ceil(reasoning.length / 8));
-        for (let i = 0; i < reasoning.length; i += reasoningChunkSize) {
-          callbacks.onReasoningChunk?.(reasoning.slice(i, i + reasoningChunkSize));
-        }
-      }
-
-      if (msg?.content) {
-        const text = msg.content;
-        const chunkSize = Math.max(1, Math.ceil(text.length / 5));
-        for (let i = 0; i < text.length; i += chunkSize) {
-          callbacks.onChunk(text.slice(i, i + chunkSize));
-        }
-      }
-
-      callbacks.onDone(msg?.content || "");
-      return;
-    }
-
-    // ── Streaming path for chat models ──
     const body: Record<string, unknown> = {
       model,
       messages,

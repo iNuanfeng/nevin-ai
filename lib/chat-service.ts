@@ -158,8 +158,9 @@ export async function handleMessage(
     if (mentor.style_config) {
       try { mentorConfig = JSON.parse(mentor.style_config); } catch {}
     }
+    // 前端开关显式传 model 时以用户选择为准；未传时回退导师默认
     const defaultModel = mentorConfig.model || "deepseek-chat";
-    const activeModel = input.model || defaultModel;
+    const activeModel = input.model ?? defaultModel;
     const useReasoner = activeModel === "deepseek-reasoner";
     // 7. 组装消息列表（reasoner 不支持 system role）
     let deepseekMessages: ChatMessage[];

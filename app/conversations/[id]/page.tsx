@@ -20,6 +20,16 @@ const CATEGORY_ICONS: Record<string, string> = {
   family: "👨‍👩‍👧", photography: "📷", growth: "🌱",
 };
 
+function mentorPrefersReasoner(mentor: { style_config?: string | null } | null): boolean {
+  if (!mentor?.style_config) return false;
+  try {
+    const config = JSON.parse(mentor.style_config);
+    return config.model === "deepseek-reasoner";
+  } catch {
+    return false;
+  }
+}
+
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
@@ -35,6 +45,7 @@ export default function ChatPage() {
   const [streamContent, setStreamContent] = useState("");
   const [streamReasoning, setStreamReasoning] = useState("");
   const [showReasoning, setShowReasoning] = useState(true);
+  const [reasoningPhase, setReasoningPhase] = useState<"idle" | "thinking" | "done">("idle");
   const [contacts, setContacts] = useState<any[]>([]);
   const [allPersons, setAllPersons] = useState<PersonOption[]>([]);
   const [showPersonSelector, setShowPersonSelector] = useState(false);
@@ -88,6 +99,7 @@ export default function ChatPage() {
 
         const m = (mentData.mentors || []).find((m: any) => m.id === convData.conversation?.mentor_id);
         setMentor(m);
+        setDeepThink(mentorPrefersReasoner(m));
         setMentors(mentData.mentors || []);
         setContacts(cpData.persons || []);
         setAllPersons((perData.persons || []).map((p: any) => ({ id: p.id, name: p.name, relationship: p.relationship })));
@@ -99,7 +111,7 @@ export default function ChatPage() {
     load();
   }, [conversationId]);
 
-  useEffect(() => { scrollToBottom(); }, [messages, streamContent]);
+  useEffect(() => { scrollToBottom(); }, [messages, streamContent, streamReasoning]);
 
   // ── Auto-resize textarea ──
   useEffect(() => {
@@ -126,12 +138,18 @@ export default function ChatPage() {
     setStreaming(true);
     setStreamContent("");
     setStreamReasoning("");
+    setShowReasoning(deepThink);
+    setReasoningPhase("idle");
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, content: text, model: deepThink ? "deepseek-reasoner" : undefined }),
+        body: JSON.stringify({
+          conversationId,
+          content: text,
+          model: deepThink ? "deepseek-reasoner" : "deepseek-chat",
+        }),
       });
 
       if (!response.ok) {
@@ -168,15 +186,21 @@ export default function ChatPage() {
             try {
               const json = JSON.parse(trimmed.slice(6));
 
-              // Reasoning content
+              // Reasoning content (streams before answer)
               if (currentEvent === "reasoning") {
                 reasoningContent += json.content || "";
                 setStreamReasoning(reasoningContent);
+                setReasoningPhase("thinking");
+                setShowReasoning(true);
                 continue;
               }
 
-              // Normal content
+              // Normal content (starts after reasoning)
               if (json.content) {
+                if (reasoningContent) {
+                  setReasoningPhase("done");
+                  setShowReasoning(false);
+                }
                 fullContent += json.content;
                 setStreamContent(fullContent);
               }
@@ -185,6 +209,8 @@ export default function ChatPage() {
               if (json.conversationId && json.messageId) {
                 setStreaming(false);
                 setStreamContent("");
+                setStreamReasoning("");
+                setReasoningPhase("idle");
                 const msgRes = await fetch(`/api/conversations/${conversationId}`);
                 const msgData = await msgRes.json();
                 setMessages(msgData.messages || []);
@@ -346,22 +372,36 @@ style={{
           <MessageBubble key={msg.id} message={msg} />
         ))}
         {streamReasoning && (
-          <div className="self-start max-w-[85%]">
-            <div
+          <div className="self-start max-w-[85%] w-full">
+            <button
+              type="button"
               onClick={() => setShowReasoning(!showReasoning)}
-              className="text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-3 py-1 rounded-t-lg cursor-pointer select-none flex items-center gap-1"
+              className="w-full text-left text-[11px] text-[#8e8e93] bg-[#f2f3f5] px-3 py-1.5 rounded-t-lg cursor-pointer select-none flex items-center gap-1.5 border-none"
             >
               <span className="font-medium">{showReasoning ? "▼" : "▶"}</span>
-              深度思考过程
-            </div>
+              {reasoningPhase === "thinking" ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="font-medium text-[#636366]">深度思考中</span>
+                  <span className="flex gap-0.5">
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                  </span>
+                </span>
+              ) : (
+                <span className="font-medium text-[#636366]">已深度思考</span>
+              )}
+            </button>
             {showReasoning && (
-              <div className="text-[12px] text-[#666] bg-[#f8f9fb] px-3 py-2 leading-relaxed border-t border-[#e8e8ed] rounded-b-lg whitespace-pre-wrap">
+              <div className="text-[12px] text-[#666] bg-[#f8f9fb] px-3 py-2 leading-relaxed border-t border-[#e8e8ed] rounded-b-lg whitespace-pre-wrap max-h-[240px] overflow-y-auto">
                 {streamReasoning}
               </div>
             )}
           </div>
         )}
-        {streaming && <MessageBubble message={{ id: 0, role: "assistant", content: streamContent || " ", created_at: "" }} />}
+        {streaming && streamContent && (
+          <MessageBubble message={{ id: 0, role: "assistant", content: streamContent, created_at: "" }} />
+        )}
         {streaming && !streamContent && !streamReasoning && <TypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
