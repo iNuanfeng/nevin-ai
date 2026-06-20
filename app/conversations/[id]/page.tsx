@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Send, Image, MoreHorizontal, Brain, Globe } from "lucide-react";
+import { ArrowLeft, Plus, Send, Image as ImageIcon, MoreHorizontal, Brain, Globe } from "lucide-react";
 import MessageBubble, { TypingIndicator, type MessageData } from "@/components/MessageBubble";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
+import ImageThumbStrip from "@/components/ImageThumbStrip";
+
+const ENABLE_IMAGE_UPLOAD = false;
+const ENABLE_WEB_SEARCH = false;
 
 const MENTOR_GRADIENTS: Record<string, string> = {
   life_manager: "linear-gradient(135deg,#667eea,#764ba2)",
@@ -51,6 +55,10 @@ export default function ChatPage() {
   const [showPersonSelector, setShowPersonSelector] = useState(false);
   const [selectorSelectedIds, setSelectorSelectedIds] = useState<number[]>([]);
   const [deepThink, setDeepThink] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
+  const [searchPhase, setSearchPhase] = useState<"idle" | "searching" | "done">("idle");
+  const [pendingImages, setPendingImages] = useState<Array<{ id: string; url: string }>>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
   const [titleGenerated, setTitleGenerated] = useState(false);
 
@@ -60,17 +68,18 @@ export default function ChatPage() {
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || uploadingImage) return;
+    setUploadingImage(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (data.url) {
-        // For now just show the URL as a message
-        setInputText(prev => prev + ` [图片](${data.url}) `);
+        setPendingImages((prev) => [...prev, { id: `${Date.now()}-${Math.random()}`, url: data.url }]);
       }
     } catch {}
+    setUploadingImage(false);
     e.target.value = "";
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -124,22 +133,25 @@ export default function ChatPage() {
   // ── Send message with SSE streaming ──
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || streaming) return;
+    const imageUrls = pendingImages.map((img) => img.url);
+    if ((!text && imageUrls.length === 0) || streaming) return;
 
-    // Optimistic user message
     const tempMsg: MessageData = {
       id: Date.now(),
       role: "user",
-      content: text,
+      content: text || "（图片）",
+      images: imageUrls.length > 0 ? JSON.stringify(imageUrls.map((url) => ({ url }))) : null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempMsg]);
     setInputText("");
+    setPendingImages([]);
     setStreaming(true);
     setStreamContent("");
     setStreamReasoning("");
     setShowReasoning(deepThink);
     setReasoningPhase("idle");
+    setSearchPhase(webSearch ? "searching" : "idle");
 
     try {
       const response = await fetch("/api/chat", {
@@ -148,7 +160,9 @@ export default function ChatPage() {
         body: JSON.stringify({
           conversationId,
           content: text,
+          images: imageUrls.length > 0 ? imageUrls : undefined,
           model: deepThink ? "deepseek-reasoner" : "deepseek-chat",
+          webSearch: webSearch || undefined,
         }),
       });
 
@@ -186,6 +200,16 @@ export default function ChatPage() {
             try {
               const json = JSON.parse(trimmed.slice(6));
 
+              // Web search status
+              if (currentEvent === "search") {
+                if (json.status === "start") {
+                  setSearchPhase("searching");
+                } else if (json.status === "done") {
+                  setSearchPhase("done");
+                }
+                continue;
+              }
+
               // Reasoning content (streams before answer)
               if (currentEvent === "reasoning") {
                 reasoningContent += json.content || "";
@@ -197,6 +221,7 @@ export default function ChatPage() {
 
               // Normal content (starts after reasoning)
               if (json.content) {
+                setSearchPhase("idle");
                 if (reasoningContent) {
                   setReasoningPhase("done");
                   setShowReasoning(false);
@@ -211,6 +236,7 @@ export default function ChatPage() {
                 setStreamContent("");
                 setStreamReasoning("");
                 setReasoningPhase("idle");
+                setSearchPhase("idle");
                 const msgRes = await fetch(`/api/conversations/${conversationId}`);
                 const msgData = await msgRes.json();
                 setMessages(msgData.messages || []);
@@ -224,6 +250,7 @@ export default function ChatPage() {
     } catch (err: any) {
       setStreaming(false);
       setStreamContent("");
+      setSearchPhase("idle");
       // Add error message
       setMessages((prev) => [
         ...prev,
@@ -366,6 +393,13 @@ style={{
         </button>
       </div>
 
+      {ENABLE_WEB_SEARCH && webSearch && (
+        <div className="flex items-center gap-1.5 px-4 py-1.5 bg-[#eef6ff] border-b border-[#d6e8ff] text-[11px] text-[#2563eb] flex-shrink-0">
+          <Globe size={12} />
+          联网搜索已开启，你的问题会发送到搜索引擎
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
         {messages.map((msg) => (
@@ -402,7 +436,18 @@ style={{
         {streaming && streamContent && (
           <MessageBubble message={{ id: 0, role: "assistant", content: streamContent, created_at: "" }} />
         )}
-        {streaming && !streamContent && !streamReasoning && <TypingIndicator />}
+        {ENABLE_WEB_SEARCH && streaming && !streamContent && !streamReasoning && searchPhase === "searching" && (
+          <div className="self-start text-[12px] text-[#2563eb] bg-[#eef6ff] px-3 py-2 rounded-lg flex items-center gap-2">
+            <Globe size={14} />
+            <span>正在联网搜索…</span>
+            <span className="flex gap-0.5">
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+              <span className="typing-dot" />
+            </span>
+          </div>
+        )}
+        {streaming && !streamContent && !streamReasoning && (!ENABLE_WEB_SEARCH || searchPhase !== "searching") && <TypingIndicator />}
         <div ref={messagesEndRef} />
       </div>
 
@@ -415,41 +460,55 @@ style={{
           <Brain size={13} />
           深度思考
         </button>
-        <button onClick={() => { 
-            const d = document.createElement("div");
-            d.className = "fixed bottom-24 left-1/2 -translate-x-1/2 bg-black/85 backdrop-blur-md text-white px-4 py-3 rounded-xl text-sm z-30 toast";
-            d.textContent = "联网搜索功能即将推出";
-            document.body.appendChild(d);
-            setTimeout(() => d.remove(), 2000);
-          }}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer border-none bg-[#f2f3f5] text-[#555]">
+        {ENABLE_WEB_SEARCH && (
+        <button onClick={() => setWebSearch(!webSearch)}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer border-none transition-colors ${
+            webSearch ? "bg-[#2563eb] text-white" : "bg-[#f2f3f5] text-[#555]"
+          }`}>
           <Globe size={13} />
           联网搜索
         </button>
+        )}
         <span className="text-[10px] text-[#aeaeb2] ml-auto">当前对话有效</span>
       </div>
       {/* Input area */}
-      <div className="flex items-end gap-2 px-3 py-2 pb-3 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
+      <div className="flex flex-col gap-2 px-3 py-2 pb-3 border-t border-[#f0f0f0] flex-shrink-0 bg-white">
+        {ENABLE_IMAGE_UPLOAD && pendingImages.length > 0 && (
+          <ImageThumbStrip
+            images={pendingImages.map((img) => img.url)}
+            onRemove={(index) => setPendingImages((prev) => prev.filter((_, i) => i !== index))}
+          />
+        )}
+        <div className="flex items-end gap-2">
+        {ENABLE_IMAGE_UPLOAD && (
+        <>
         <input type="file" accept="image/*" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={() => fileInputRef.current?.click()} className="w-[34px] h-[34px] rounded-full bg-[#f2f3f5] flex items-center justify-center border-none cursor-pointer flex-shrink-0">
-          <Image size={18} className="text-[#666]" />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingImage}
+          className="w-[34px] h-[34px] rounded-full bg-[#f2f3f5] flex items-center justify-center border-none cursor-pointer flex-shrink-0 disabled:opacity-40"
+        >
+          <ImageIcon size={18} className="text-[#666]" />
         </button>
+        </>
+        )}
         <textarea
           ref={textareaRef}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入消息…"
+          placeholder={uploadingImage ? "图片上传中…" : "输入消息…"}
           rows={1}
           className="flex-1 border-none bg-[#f2f3f5] rounded-[20px] px-3.5 py-2 text-sm font-inherit resize-none outline-none min-h-[36px] max-h-[100px]"
         />
         <button
           onClick={handleSend}
-          disabled={!inputText.trim() || streaming}
+          disabled={(!inputText.trim() && pendingImages.length === 0) || streaming || uploadingImage}
           className="w-[36px] h-[36px] rounded-full bg-[#007aff] text-white flex items-center justify-center border-none cursor-pointer flex-shrink-0 disabled:opacity-40"
         >
           <Send size={16} />
         </button>
+        </div>
       </div>
 
       {/* Person Selector */}

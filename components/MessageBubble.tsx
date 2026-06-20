@@ -1,6 +1,8 @@
 "use client";
 
 import MarkdownRenderer from "./MarkdownRenderer";
+import { MessageImages } from "./ImageThumbStrip";
+import { parseDbDateTime } from "@/lib/datetime-context";
 
 export interface MessageData {
   id: number;
@@ -13,7 +15,7 @@ export interface MessageData {
 export default function MessageBubble({ message }: { message: MessageData }) {
   const isUser = message.role === "user";
   const time = message.created_at
-    ? new Date(message.created_at).toLocaleTimeString("zh-CN", {
+    ? parseDbDateTime(message.created_at).toLocaleTimeString("zh-CN", {
         hour: "2-digit",
         minute: "2-digit",
       })
@@ -25,8 +27,11 @@ export default function MessageBubble({ message }: { message: MessageData }) {
         ? "bg-[#007aff] text-white self-end rounded-br-sm"
         : "bg-[#f2f3f5] text-[#1d1d1f] self-start rounded-bl-sm"
     }`}>
+      {isUser && <MessageImages images={message.images} />}
       {isUser ? (
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        message.content && message.content !== "（图片）" ? (
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        ) : null
       ) : (
         <MarkdownRenderer content={message.content} />
       )}

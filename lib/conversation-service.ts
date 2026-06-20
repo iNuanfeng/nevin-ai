@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import type { ImageAttachment } from "@/lib/image-utils";
 
 export interface Conversation {
   id: number;
@@ -125,11 +126,18 @@ export function getMessagesByConversation(conversationId: number, limit?: number
 /**
  * 保存用户消息
  */
-export function saveUserMessage(conversationId: number, content: string, images?: string[]): Message {
+export function saveUserMessage(
+  conversationId: number,
+  content: string,
+  images?: ImageAttachment[] | string[]
+): Message {
   const db = getDb();
+  const normalizedImages = images?.length
+    ? images.map((img) => (typeof img === "string" ? { url: img } : img))
+    : undefined;
   const result = db.prepare(
     "INSERT INTO messages (conversation_id, role, content, images) VALUES (?, 'user', ?, ?)"
-  ).run(conversationId, content, images ? JSON.stringify(images) : null);
+  ).run(conversationId, content, normalizedImages ? JSON.stringify(normalizedImages) : null);
   return db.prepare("SELECT * FROM messages WHERE id = ?").get(result.lastInsertRowid) as Message;
 }
 

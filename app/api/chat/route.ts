@@ -13,9 +13,9 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { conversationId, content, images, model } = body;
+    const { conversationId, content, images, model, webSearch } = body;
 
-    if (!conversationId || !content) {
+    if (!conversationId || (!content && (!images || images.length === 0))) {
       return NextResponse.json(
         { error: "conversationId and content are required" },
         { status: 400 }
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         let closed = false;
 
         handleMessage(
-          { conversationId, content, images, model },
+          { conversationId, content: content ?? "", images, model, webSearch },
           {
             onChunk: (text) => {
               if (!closed) {
@@ -41,6 +41,18 @@ export async function POST(req: NextRequest) {
             onReasoningChunk: (text) => {
               if (!closed) {
                 const data = encoder.encode(`event: reasoning\ndata: ${JSON.stringify({ content: text })}\n\n`);
+                controller.enqueue(data);
+              }
+            },
+            onWebSearchStart: () => {
+              if (!closed) {
+                const data = encoder.encode(`event: search\ndata: ${JSON.stringify({ status: "start" })}\n\n`);
+                controller.enqueue(data);
+              }
+            },
+            onWebSearchComplete: (count) => {
+              if (!closed) {
+                const data = encoder.encode(`event: search\ndata: ${JSON.stringify({ status: "done", count })}\n\n`);
                 controller.enqueue(data);
               }
             },

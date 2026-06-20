@@ -1,4 +1,8 @@
 import { ChatMessage, chatStream, analyze } from "@/lib/deepseek";
+import { analyzeUploadedImages } from "@/lib/image-service";
+import { buildImageContextBlock, parseMessageImages, type ImageAttachment } from "@/lib/image-utils";
+import { formatWebSearchForPrompt, searchWeb } from "@/lib/web-search";
+import { getServerDateTimeContext, isDateTimeQuery } from "@/lib/datetime-context";
 import { getProfile, updateProfile } from "@/lib/profile-service";
 import { getMentorById, Mentor } from "@/lib/mentor-service";
 import { getPersonsByConversation, appendPersonInsight } from "@/lib/person-service";
@@ -19,6 +23,7 @@ export interface HandleMessageInput {
   content: string;
   images?: string[];
   model?: string;
+  webSearch?: boolean;
 }
 
 export interface HandleMessageCallbacks {
@@ -31,6 +36,8 @@ export interface HandleMessageCallbacks {
   onPersonUpdated?: (personId: number, field: string, hasNew: boolean) => void;
   /** 流式错误 */
   onReasoningChunk?: (text: string) => void;
+  onWebSearchStart?: () => void;
+  onWebSearchComplete?: (count: number) => void;
   onError: (error: Error) => void;
 }
 
@@ -100,9 +107,27 @@ function buildSystemPrompt(
   }
 
   lines.push("");
+  lines.push("【当前时间】");
+  lines.push(`服务器时间：${getServerDateTimeContext()}`);
+  lines.push("回答涉及「今天、现在、日期、星期」等问题时，必须以上述服务器时间为准，不要猜测或使用训练数据中的旧日期。");
+
+  lines.push("");
   lines.push("【对话上下文】");
 
   return lines.join("\n");
+}
+
+function formatMessageForAI(message: Message): ChatMessage {
+  const role = message.role as "user" | "assistant";
+  let content = message.content;
+  if (role === "user") {
+    const attachments = parseMessageImages(message.images);
+    const imageBlock = buildImageContextBlock(attachments);
+    if (imageBlock) {
+      content = content.trim() ? `${content.trim()}\n\n${imageBlock}` : imageBlock;
+    }
+  }
+  return { role, content };
 }
 
 /**
@@ -128,8 +153,17 @@ export async function handleMessage(
       throw new Error(`Conversation ${conversationId} not found`);
     }
 
-    // 2. 保存用户消息
-    saveUserMessage(conversationId, content, images);
+    // 2. 分析并保存用户消息
+    let analyzedImages: ImageAttachment[] = [];
+    if (images && images.length > 0) {
+      analyzedImages = await analyzeUploadedImages(images);
+    }
+    const displayContent = content.trim() || (analyzedImages.length > 0 ? "（图片）" : "");
+    saveUserMessage(
+      conversationId,
+      displayContent,
+      analyzedImages.length > 0 ? analyzedImages : undefined
+    );
 
     // 3. 读取上下文
     const profile = getProfile();
@@ -142,7 +176,8 @@ export async function handleMessage(
     const personIds = persons.map((p) => p.id);
 
     // 4. 检索记忆
-    const memories = retrieveRelevant(content, {
+    const memoryQuery = [content, ...analyzedImages.map((img) => img.ocrText)].filter(Boolean).join("\n");
+    const memories = retrieveRelevant(memoryQuery || content, {
       mentorId: mentor.id,
       limit: 10,
     });
@@ -151,7 +186,29 @@ export async function handleMessage(
     const recentMessages = getMessagesByConversation(conversationId, MAX_CONTEXT_MESSAGES);
 
     // 6. 组装 System Prompt
-    const systemPrompt = buildSystemPrompt(profile, mentor, persons, memories);
+    let systemPrompt = buildSystemPrompt(profile, mentor, persons, memories);
+
+    if (input.webSearch && content.trim()) {
+      callbacks.onWebSearchStart?.();
+      try {
+        const webResults = await searchWeb(content.trim());
+        systemPrompt += `\n\n${formatWebSearchForPrompt(webResults)}`;
+        callbacks.onWebSearchComplete?.(webResults.length);
+      } catch (err) {
+        console.warn("[web-search] failed:", err instanceof Error ? err.message : err);
+        const fallback = isDateTimeQuery(content)
+          ? formatWebSearchForPrompt([
+              {
+                title: "服务器当前时间",
+                url: "server://local-time",
+                snippet: getServerDateTimeContext(),
+              },
+            ])
+          : formatWebSearchForPrompt([], true);
+        systemPrompt += `\n\n${fallback}`;
+        callbacks.onWebSearchComplete?.(0);
+      }
+    }
 
     // 读取导师默认 model 配置
     let mentorConfig: { model?: string } = {};
@@ -167,21 +224,14 @@ export async function handleMessage(
     if (useReasoner) {
       deepseekMessages = [
         { role: "user", content: systemPrompt },
-        ...recentMessages.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
+        ...recentMessages.map(formatMessageForAI),
       ];
     } else {
       deepseekMessages = [
         { role: "system", content: systemPrompt },
-        ...recentMessages.map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
+        ...recentMessages.map(formatMessageForAI),
       ];
     }
-    // Note: image messages supported by ChatMessage type, full multi-modal in Phase 3n
 
 
     // 8. 调用 DeepSeek 流式（按模型选择 reasoner 或 chat）
@@ -221,22 +271,6 @@ export async function handleMessage(
     callbacks.onError(error);
   }
 }
-
-/**
- * 构建带图片的 content 数组
- */
-function buildImageContent(text: string, images: string[]): ChatMessageContent {
-  if (!images || images.length === 0) return text;
-  return [
-    { type: "text", text },
-    ...images.map((img) => ({
-      type: "image_url" as const,
-      image_url: { url: img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}` },
-    })),
-  ];
-}
-
-type ChatMessageContent = string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
 
 // ── 异步后处理 ──
 

@@ -165,8 +165,9 @@ export default function HomePage() {
   };
 
   // ── Delete conversation ──
-  const handleDeleteConv = async (id: number) => {
+  const handleDeleteConv = (id: number) => {
     setDeleteTarget(id);
+    setDeleteMode("conversation");
   };
 
   const confirmDelete = () => {
@@ -176,6 +177,7 @@ export default function HomePage() {
     
     if (deleteMode === "conversation") {
       setPendingDelete(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
       const timer = setTimeout(async () => {
         try {
           await fetch(`/api/conversations/${id}`, { method: "DELETE" });
@@ -188,6 +190,7 @@ export default function HomePage() {
       setToastAction(() => () => {
         clearTimeout(timer);
         setPendingDelete(null);
+        fetchConversations();
         setToastMsg(null);
         setToastAction(null);
       });
@@ -287,6 +290,7 @@ export default function HomePage() {
 
   // ── Filter conversations by mentor ──
   const filteredConversations = conversations.filter((c) => {
+    if (pendingDelete === c.id) return false;
     if (filterCategory && c.mentor_category !== filterCategory) return false;
     if (searchTerm) {
       const term = searchTerm;

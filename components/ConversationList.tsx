@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
+import { parseDbDateTime } from "@/lib/datetime-context";
 
 export interface ConversationItemData {
   id: number;
@@ -37,7 +38,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const d = parseDbDateTime(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
