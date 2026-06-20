@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import type { ImageAttachment } from "@/lib/image-utils";
+import { MESSAGE_PAGE_SIZE } from "@/lib/chat-constants";
 
 export interface Conversation {
   id: number;
@@ -36,36 +37,149 @@ export interface ConversationListItem {
   created_at: string;
 }
 
+export interface ConversationListPage {
+  items: ConversationListItem[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export const CONVERSATION_LIST_PAGE_SIZE = 5;
+
+const CONVERSATION_LIST_SELECT = `
+  SELECT
+    c.id,
+    c.mentor_id,
+    m.name AS mentor_name,
+    m.title AS mentor_title,
+    m.category AS mentor_category,
+    c.title,
+    c.summary,
+    lm.content AS last_message,
+    lm.created_at AS last_message_at,
+    (SELECT GROUP_CONCAT(p.name, ', ') FROM conversation_persons cp JOIN persons p ON p.id = cp.person_id WHERE cp.conversation_id = c.id) AS person_names,
+    c.created_at,
+    COALESCE(lm.created_at, c.created_at) AS sort_at
+  FROM conversations c
+  JOIN mentors m ON m.id = c.mentor_id
+  LEFT JOIN messages lm ON lm.id = (
+    SELECT id FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1
+  )
+  WHERE c.deleted = 0
+`;
+
+function mapConversationRows(rows: Array<ConversationListItem & { sort_at?: string }>): ConversationListItem[] {
+  return rows.map(({ sort_at: _sortAt, ...item }) => item);
+}
+
+export function encodeConversationCursor(sortAt: string, id: number): string {
+  return Buffer.from(`${sortAt}\t${id}`, "utf8").toString("base64url");
+}
+
+export function decodeConversationCursor(cursor: string): { sortAt: string; id: number } | null {
+  try {
+    const raw = Buffer.from(cursor, "base64url").toString("utf8");
+    const tab = raw.lastIndexOf("\t");
+    if (tab === -1) return null;
+    const id = Number.parseInt(raw.slice(tab + 1), 10);
+    if (!Number.isFinite(id)) return null;
+    return { sortAt: raw.slice(0, tab), id };
+  } catch {
+    return null;
+  }
+}
+
+export interface GetConversationsPageOptions {
+  mentorId?: number;
+  category?: string;
+  limit?: number;
+  cursor?: string;
+}
+
 /**
- * 获取对话列表，支持按 mentor 筛选。
- * 只返回非软删除的对话，附带最后一条消息预览和导师信息。
+ * 分页获取对话列表（按最近活跃时间倒序）。
+ * 不传 limit 时返回全部（兼容测试/统计场景）。
  */
-export function getConversations(mentorId?: number): ConversationListItem[] {
+export function getConversationsPage(options: GetConversationsPageOptions = {}): ConversationListPage {
+  const db = getDb();
+  const { mentorId, category, limit, cursor } = options;
+
+  let sql = CONVERSATION_LIST_SELECT;
+  const params: unknown[] = [];
+
+  if (mentorId !== undefined) {
+    sql += " AND c.mentor_id = ?";
+    params.push(mentorId);
+  }
+  if (category) {
+    sql += " AND m.category = ?";
+    params.push(category);
+  }
+
+  const decoded = cursor ? decodeConversationCursor(cursor) : null;
+  if (cursor && !decoded) {
+    return { items: [], hasMore: false, nextCursor: null };
+  }
+  if (decoded) {
+    sql += " AND (COALESCE(lm.created_at, c.created_at) < ? OR (COALESCE(lm.created_at, c.created_at) = ? AND c.id < ?))";
+    params.push(decoded.sortAt, decoded.sortAt, decoded.id);
+  }
+
+  sql += " ORDER BY sort_at DESC, c.id DESC";
+
+  const fetchLimit = limit !== undefined ? limit + 1 : undefined;
+  if (fetchLimit !== undefined) {
+    sql += " LIMIT ?";
+    params.push(fetchLimit);
+  }
+
+  const rows = db.prepare(sql).all(...params) as Array<ConversationListItem & { sort_at: string }>;
+
+  if (limit === undefined) {
+    return {
+      items: mapConversationRows(rows),
+      hasMore: false,
+      nextCursor: null,
+    };
+  }
+
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const last = pageRows[pageRows.length - 1];
+
+  return {
+    items: mapConversationRows(pageRows),
+    hasMore,
+    nextCursor: hasMore && last ? encodeConversationCursor(last.sort_at, last.id) : null,
+  };
+}
+
+export function countConversations(options: { mentorId?: number; category?: string } = {}): number {
   const db = getDb();
   let sql = `
-    SELECT
-      c.id,
-      c.mentor_id,
-      m.name AS mentor_name,
-      m.title AS mentor_title,
-      m.category AS mentor_category,
-      c.title,
-      c.summary,
-      (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
-      (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_at,
-      (SELECT GROUP_CONCAT(p.name, ', ') FROM conversation_persons cp JOIN persons p ON p.id = cp.person_id WHERE cp.conversation_id = c.id) AS person_names,
-      c.created_at
+    SELECT COUNT(*) AS c
     FROM conversations c
     JOIN mentors m ON m.id = c.mentor_id
     WHERE c.deleted = 0
   `;
   const params: unknown[] = [];
-  if (mentorId !== undefined) {
-    sql += ` AND c.mentor_id = ?`;
-    params.push(mentorId);
+  if (options.mentorId !== undefined) {
+    sql += " AND c.mentor_id = ?";
+    params.push(options.mentorId);
   }
-  sql += ` ORDER BY COALESCE(last_message_at, c.created_at) DESC`;
-  return db.prepare(sql).all(...params) as ConversationListItem[];
+  if (options.category) {
+    sql += " AND m.category = ?";
+    params.push(options.category);
+  }
+  const row = db.prepare(sql).get(...params) as { c: number };
+  return row.c;
+}
+
+/**
+ * 获取对话列表，支持按 mentor 筛选。
+ * @deprecated 列表页请使用 getConversationsPage
+ */
+export function getConversations(mentorId?: number): ConversationListItem[] {
+  return getConversationsPage({ mentorId }).items;
 }
 
 /**
@@ -109,7 +223,7 @@ export function deleteConversation(id: number): void {
 }
 
 /**
- * 获取某条对话的全部消息，按时间正序
+ * 获取某条对话的全部消息，按时间正序（供 AI 上下文等内部使用）
  */
 export function getMessagesByConversation(conversationId: number, limit?: number): Message[] {
   const db = getDb();
@@ -121,6 +235,46 @@ export function getMessagesByConversation(conversationId: number, limit?: number
   return db.prepare(
     "SELECT * FROM messages WHERE conversation_id = ? ORDER BY id ASC"
   ).all(conversationId) as Message[];
+}
+
+export interface MessagePage {
+  items: Message[];
+  hasMore: boolean;
+  totalCount: number;
+}
+
+/**
+ * 分页获取消息：默认返回最新一页，按时间正序。
+ * beforeId：加载比该 id 更早的消息（向上滚动）
+ */
+export function getMessagesPage(
+  conversationId: number,
+  options: { limit?: number; beforeId?: number } = {}
+): MessagePage {
+  const db = getDb();
+  const limit = options.limit ?? MESSAGE_PAGE_SIZE;
+  const totalCount = db.prepare(
+    "SELECT COUNT(*) AS c FROM messages WHERE conversation_id = ?"
+  ).get(conversationId) as { c: number };
+
+  let sql = "SELECT * FROM messages WHERE conversation_id = ?";
+  const params: unknown[] = [conversationId];
+  if (options.beforeId !== undefined) {
+    sql += " AND id < ?";
+    params.push(options.beforeId);
+  }
+  sql += " ORDER BY id DESC LIMIT ?";
+  params.push(limit + 1);
+
+  const rows = db.prepare(sql).all(...params) as Message[];
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit).reverse();
+
+  return {
+    items,
+    hasMore,
+    totalCount: totalCount.c,
+  };
 }
 
 /**

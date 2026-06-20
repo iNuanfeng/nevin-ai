@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { parseDbDateTime } from "@/lib/datetime-context";
@@ -55,14 +56,80 @@ function getPreview(msg: string | null): string {
   return msg.length > 50 ? msg.slice(0, 50) + "…" : msg;
 }
 
+function listFitsContainer(root: HTMLElement | null): boolean {
+  if (!root) return true;
+  return root.scrollHeight <= root.clientHeight + 4;
+}
+
 export default function ConversationList({
   conversations,
   onDelete,
+  loading = false,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  scrollRootRef,
 }: {
   conversations: ConversationItemData[];
   onDelete: (id: number) => void;
+  loading?: boolean;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
+  scrollRootRef?: RefObject<HTMLElement | null>;
 }) {
   const router = useRouter();
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [needsManualLoad, setNeedsManualLoad] = useState(false);
+
+  useEffect(() => {
+    const root = scrollRootRef?.current ?? null;
+    if (!root || !hasMore) {
+      setNeedsManualLoad(false);
+      return;
+    }
+
+    const update = () => setNeedsManualLoad(listFitsContainer(root));
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(root);
+    root.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      root.removeEventListener("scroll", update);
+    };
+  }, [conversations.length, hasMore, scrollRootRef]);
+
+  useEffect(() => {
+    if (!hasMore || loadingMore || !onLoadMore || needsManualLoad) return;
+    const root = scrollRootRef?.current ?? null;
+    const el = sentinelRef.current;
+    if (!el || !root) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting || loadingMore) return;
+        if (listFitsContainer(root)) return;
+        onLoadMore();
+      },
+      { root, rootMargin: "48px", threshold: 0 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, onLoadMore, conversations.length, needsManualLoad, scrollRootRef]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="flex gap-1">
+          <span className="typing-dot" />
+          <span className="typing-dot" />
+          <span className="typing-dot" />
+        </div>
+        <p className="text-[#aeaeb2] text-xs mt-3">加载最近对话…</p>
+      </div>
+    );
+  }
 
   if (conversations.length === 0) {
     return (
@@ -149,6 +216,21 @@ export default function ConversationList({
           </button>
         </div>
       ))}
+      {hasMore && (
+        <div ref={sentinelRef} className="py-3 text-center">
+          {loadingMore ? (
+            <span className="text-[11px] text-[#aeaeb2]">加载更多…</span>
+          ) : needsManualLoad ? (
+            <button
+              type="button"
+              onClick={() => onLoadMore?.()}
+              className="text-[12px] text-[#007aff] bg-[#eef6ff] px-4 py-2 rounded-full border-none cursor-pointer"
+            >
+              加载更多
+            </button>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

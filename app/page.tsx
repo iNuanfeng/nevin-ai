@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, ArrowUp, Download, X, Check, Archive, RotateCcw, MessageSquare, User, BookOpen } from "lucide-react";
 
@@ -28,10 +28,15 @@ const REL_BADGE: Record<string, string> = {
 
 export default function HomePage() {
   const router = useRouter();
+  const listScrollRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabId>("home");
 
   // ── Data states ──
   const [conversations, setConversations] = useState<ConversationItemData[]>([]);
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [nextConversationCursor, setNextConversationCursor] = useState<string | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [loadingMoreConversations, setLoadingMoreConversations] = useState(false);
   const [mentors, setMentors] = useState<MentorOption[]>([]);
   const [persons, setPersons] = useState<PersonOption[]>([]);
   const [personsFull, setPersonsFull] = useState<any[]>([]);
@@ -69,13 +74,45 @@ export default function HomePage() {
   const [backupStats, setBackupStats] = useState({ conversations: 0, persons: 0, memories: 0 });
 
   // ── Data fetching ──
+  const buildConversationsUrl = useCallback((cursor?: string | null) => {
+    const params = new URLSearchParams({ limit: "5" });
+    if (filterCategory) params.set("category", filterCategory);
+    if (cursor) params.set("cursor", cursor);
+    return `/api/conversations?${params.toString()}`;
+  }, [filterCategory]);
+
   const fetchConversations = useCallback(async () => {
+    setLoadingConversations(true);
     try {
-      const res = await fetch("/api/conversations");
+      const res = await fetch(buildConversationsUrl());
       const data = await res.json();
       setConversations(data.conversations || []);
-    } catch {}
-  }, []);
+      setHasMoreConversations(Boolean(data.hasMore));
+      setNextConversationCursor(data.nextCursor ?? null);
+    } catch {
+      setConversations([]);
+      setHasMoreConversations(false);
+      setNextConversationCursor(null);
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, [buildConversationsUrl]);
+
+  const loadMoreConversations = useCallback(async () => {
+    if (!hasMoreConversations || !nextConversationCursor || loadingMoreConversations) return;
+    setLoadingMoreConversations(true);
+    try {
+      const res = await fetch(buildConversationsUrl(nextConversationCursor));
+      const data = await res.json();
+      setConversations((prev) => [...prev, ...(data.conversations || [])]);
+      setHasMoreConversations(Boolean(data.hasMore));
+      setNextConversationCursor(data.nextCursor ?? null);
+    } catch {
+      // keep current list on load-more failure
+    } finally {
+      setLoadingMoreConversations(false);
+    }
+  }, [buildConversationsUrl, hasMoreConversations, nextConversationCursor, loadingMoreConversations]);
 
   const fetchMentors = useCallback(async () => {
     try {
@@ -115,7 +152,7 @@ export default function HomePage() {
   const fetchBackupStats = useCallback(async () => {
     try {
       const [convRes, perRes, memRes] = await Promise.all([
-        fetch("/api/conversations"),
+        fetch("/api/conversations?countOnly=1"),
         fetch("/api/persons"),
         fetch("/api/memory"),
       ]);
@@ -123,7 +160,7 @@ export default function HomePage() {
       const per = await perRes.json();
       const mem = await memRes.json();
       setBackupStats({
-        conversations: (conv.conversations || []).length,
+        conversations: conv.count ?? 0,
         persons: (per.persons || []).length,
         memories: (mem.memories || []).length,
       });
@@ -139,7 +176,7 @@ export default function HomePage() {
   useEffect(() => {
     if (activeTab === "home") fetchConversations();
     if (activeTab === "backup") fetchBackupStats();
-  }, [activeTab, fetchConversations, fetchBackupStats]);
+  }, [activeTab, filterCategory, fetchConversations, fetchBackupStats]);
 
   // Register service worker
   useEffect(() => {
@@ -291,14 +328,6 @@ export default function HomePage() {
   // ── Filter conversations by mentor ──
   const filteredConversations = conversations.filter((c) => {
     if (pendingDelete === c.id) return false;
-    if (filterCategory && c.mentor_category !== filterCategory) return false;
-    if (searchTerm) {
-      const term = searchTerm;
-      const title = (c.title || c.mentor_name || '');
-      const msg = (c.last_message || '');
-      const persons = (c.person_names || '');
-      if (!title.includes(term) && !msg.includes(term) && !persons.includes(term)) return false;
-    }
     return true;
   });
 
@@ -394,13 +423,18 @@ export default function HomePage() {
             </span>
           </div>
 
-          <MentorFilter selected={filterCategory} onChange={(cat) => {
-            setFilterCategory(cat);
-            fetchConversations();
-          }} />
+          <MentorFilter selected={filterCategory} onChange={setFilterCategory} />
 
-          <div className="flex-1 overflow-y-auto">
-            <ConversationList conversations={filteredConversations} onDelete={handleDeleteConv} />
+          <div ref={listScrollRef} className="flex-1 overflow-y-auto min-h-0">
+            <ConversationList
+              conversations={filteredConversations}
+              onDelete={handleDeleteConv}
+              loading={loadingConversations}
+              hasMore={hasMoreConversations}
+              loadingMore={loadingMoreConversations}
+              onLoadMore={loadMoreConversations}
+              scrollRootRef={listScrollRef}
+            />
           </div>
 
           <button

@@ -1,25 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteConversation, getConversationById, getMessagesByConversation } from "@/lib/conversation-service";
+import {
+  deleteConversation,
+  getConversationById,
+  getMessagesPage,
+} from "@/lib/conversation-service";
+import { MESSAGE_PAGE_SIZE } from "@/lib/chat-constants";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/conversations/:id
- * 获取对话详情及消息列表
+ * 查询参数：?limit=20&before=123（加载 id 更早的消息）
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const conversationId = parseInt(id);
+    const conversationId = parseInt(id, 10);
     const conversation = getConversationById(conversationId);
     if (!conversation) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
-    const messages = getMessagesByConversation(conversationId);
-    return NextResponse.json({ conversation, messages });
+
+    const { searchParams } = new URL(req.url);
+    const limitParam = searchParams.get("limit");
+    const beforeParam = searchParams.get("before");
+    const limit = limitParam ? parseInt(limitParam, 10) : MESSAGE_PAGE_SIZE;
+    const beforeId = beforeParam ? parseInt(beforeParam, 10) : undefined;
+
+    const page = getMessagesPage(conversationId, {
+      limit: Number.isFinite(limit) && limit > 0 ? limit : MESSAGE_PAGE_SIZE,
+      beforeId: Number.isFinite(beforeId) ? beforeId : undefined,
+    });
+
+    return NextResponse.json({
+      conversation,
+      messages: page.items,
+      hasMore: page.hasMore,
+      totalCount: page.totalCount,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -35,7 +56,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const conversationId = parseInt(id);
+    const conversationId = parseInt(id, 10);
     const conversation = getConversationById(conversationId);
     if (!conversation) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });

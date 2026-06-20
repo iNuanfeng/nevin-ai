@@ -22,23 +22,25 @@ export default function MessageBubble({ message }: { message: MessageData }) {
     : "";
 
   return (
-    <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
-      isUser
-        ? "bg-[#007aff] text-white self-end rounded-br-sm"
-        : "bg-[#f2f3f5] text-[#1d1d1f] self-start rounded-bl-sm"
-    }`}>
-      {isUser && <MessageImages images={message.images} />}
-      {isUser ? (
-        message.content && message.content !== "（图片）" ? (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        ) : null
-      ) : (
-        <MarkdownRenderer content={message.content} />
-      )}
-      <div className={`text-[10px] mt-1 text-right ${
-        isUser ? "text-white/50" : "text-[#aeaeb2]"
+    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed relative ${
+        isUser
+          ? "bg-[#007aff] text-white rounded-br-sm"
+          : "bg-[#f2f3f5] text-[#1d1d1f] rounded-bl-sm"
       }`}>
-        {time}
+        {isUser && <MessageImages images={message.images} />}
+        {isUser ? (
+          message.content && message.content !== "（图片）" ? (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          ) : null
+        ) : (
+          <MarkdownRenderer content={message.content} />
+        )}
+        <div className={`text-[10px] mt-1 text-right ${
+          isUser ? "text-white/50" : "text-[#aeaeb2]"
+        }`}>
+          {time}
+        </div>
       </div>
     </div>
   );
@@ -46,11 +48,13 @@ export default function MessageBubble({ message }: { message: MessageData }) {
 
 export function TypingIndicator() {
   return (
-    <div className="max-w-[80%] px-3.5 py-3 rounded-2xl bg-[#f2f3f5] self-start rounded-bl-sm">
-      <div className="flex gap-1">
-        <span className="typing-dot" />
-        <span className="typing-dot" />
-        <span className="typing-dot" />
+    <div className="flex w-full justify-start">
+      <div className="max-w-[80%] px-3.5 py-3 rounded-2xl bg-[#f2f3f5] rounded-bl-sm">
+        <div className="flex gap-1">
+          <span className="typing-dot" />
+          <span className="typing-dot" />
+          <span className="typing-dot" />
+        </div>
       </div>
     </div>
   );

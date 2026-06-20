@@ -9,7 +9,7 @@ import { getPersonsByConversation, appendPersonInsight } from "@/lib/person-serv
 import { retrieveRelevant, storeMemory, buildRefinePrompt } from "@/lib/memory-service";
 import {
   getConversationById,
-  getMessagesByConversation,
+  getMessagesPage,
   saveUserMessage,
   saveAssistantMessage,
   updateConversationTitle,
@@ -183,7 +183,7 @@ export async function handleMessage(
     });
 
     // 5. 获取最近上下文消息
-    const recentMessages = getMessagesByConversation(conversationId, MAX_CONTEXT_MESSAGES);
+    const recentMessages = getMessagesPage(conversationId, { limit: MAX_CONTEXT_MESSAGES }).items;
 
     // 6. 组装 System Prompt
     let systemPrompt = buildSystemPrompt(profile, mentor, persons, memories);

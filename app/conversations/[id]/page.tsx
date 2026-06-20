@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Send, Image as ImageIcon, MoreHorizontal, Brain, Globe } from "lucide-react";
 import MessageBubble, { TypingIndicator, type MessageData } from "@/components/MessageBubble";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
+import { MESSAGE_PRELOAD_REMAINING } from "@/lib/chat-constants";
 import ImageThumbStrip from "@/components/ImageThumbStrip";
 
 const ENABLE_IMAGE_UPLOAD = false;
@@ -42,6 +43,9 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [conversation, setConversation] = useState<any>(null);
   const [messages, setMessages] = useState<MessageData[]>([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [totalMessageCount, setTotalMessageCount] = useState(0);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [mentor, setMentor] = useState<any>(null);
   const [mentors, setMentors] = useState<any[]>([]);
   const [inputText, setInputText] = useState("");
@@ -63,6 +67,12 @@ export default function ChatPage() {
   const [titleGenerated, setTitleGenerated] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<MessageData[]>([]);
+  const preloadAnchorRef = useRef<HTMLDivElement>(null);
+  const loadingOlderRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
   const swipeRef = useRef<{ startX: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -86,12 +96,79 @@ export default function ChatPage() {
   };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  messagesRef.current = messages;
+  hasMoreRef.current = hasMoreMessages;
+
+  function isServerMessageId(id: number): boolean {
+    return Number.isFinite(id) && id > 0 && id < 1_000_000_000_000;
+  }
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (loadingOlderRef.current || !hasMoreRef.current) return;
+    const oldest = messagesRef.current.find((m) => isServerMessageId(m.id));
+    if (!oldest) return;
+
+    loadingOlderRef.current = true;
+    setLoadingOlderMessages(true);
+    const container = messagesScrollRef.current;
+    const prevHeight = container?.scrollHeight ?? 0;
+
+    try {
+      const res = await fetch(
+        `/api/conversations/${conversationId}?limit=10&before=${oldest.id}`
+      );
+      const data = await res.json();
+      const older: MessageData[] = data.messages || [];
+      if (older.length > 0) {
+        setMessages((prev) => [...older, ...prev]);
+      }
+      setHasMoreMessages(Boolean(data.hasMore));
+      if (typeof data.totalCount === "number") {
+        setTotalMessageCount(data.totalCount);
+      }
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (container) {
+            container.scrollTop = container.scrollHeight - prevHeight;
+          }
+        });
+      });
+    } catch {
+      // keep current messages
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlderMessages(false);
+    }
+  }, [conversationId]);
+
+  const preloadAnchorIndex = Math.max(0, Math.min(MESSAGE_PRELOAD_REMAINING - 1, messages.length - 1));
+
+  useEffect(() => {
+    if (!hasMoreMessages || loadingOlderMessages) return;
+    const root = messagesScrollRef.current;
+    const target = preloadAnchorRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadOlderMessages();
+        }
+      },
+      { root, rootMargin: "240px 0px 0px 0px", threshold: 0 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreMessages, loadingOlderMessages, loadOlderMessages, messages.length, preloadAnchorIndex]);
 
   // ── Load data ──
   useEffect(() => {
+    initialScrollDoneRef.current = false;
     const load = async () => {
       try {
         const [convRes, mentRes, cpRes, perRes] = await Promise.all([
@@ -107,6 +184,8 @@ export default function ChatPage() {
 
         setConversation(convData.conversation);
         setMessages(convData.messages || []);
+        setHasMoreMessages(Boolean(convData.hasMore));
+        setTotalMessageCount(convData.totalCount ?? (convData.messages?.length ?? 0));
 
         const m = (mentData.mentors || []).find((m: any) => m.id === convData.conversation?.mentor_id);
         setMentor(m);
@@ -122,7 +201,17 @@ export default function ChatPage() {
     load();
   }, [conversationId]);
 
-  useEffect(() => { scrollToBottom(); }, [messages, streamContent, streamReasoning]);
+  useEffect(() => {
+    if (loading || initialScrollDoneRef.current) return;
+    if (messages.length === 0) return;
+    initialScrollDoneRef.current = true;
+    requestAnimationFrame(() => scrollToBottom("auto"));
+  }, [loading, messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    if (streaming || !initialScrollDoneRef.current) return;
+    scrollToBottom();
+  }, [streamContent, streamReasoning, streaming, scrollToBottom]);
 
   // ── Auto-resize textarea ──
   useEffect(() => {
@@ -138,8 +227,9 @@ export default function ChatPage() {
     const imageUrls = pendingImages.map((img) => img.url);
     if ((!text && imageUrls.length === 0) || streaming) return;
 
+    const tempId = Date.now();
     const tempMsg: MessageData = {
-      id: Date.now(),
+      id: tempId,
       role: "user",
       content: text || "（图片）",
       images: imageUrls.length > 0 ? JSON.stringify(imageUrls.map((url) => ({ url }))) : null,
@@ -148,6 +238,7 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, tempMsg]);
     setInputText("");
     setPendingImages([]);
+    requestAnimationFrame(() => scrollToBottom("auto"));
     setStreaming(true);
     setStreamContent("");
     setStreamReasoning("");
@@ -239,9 +330,22 @@ export default function ChatPage() {
                 setStreamReasoning("");
                 setReasoningPhase("idle");
                 setSearchPhase("idle");
-                const msgRes = await fetch(`/api/conversations/${conversationId}`);
-                const msgData = await msgRes.json();
-                setMessages(msgData.messages || []);
+                setMessages((prev) => {
+                  const userMsg = prev.find((m) => m.id === tempId);
+                  const rest = prev.filter((m) => m.id !== tempId);
+                  return [
+                    ...rest,
+                    ...(userMsg ? [userMsg] : []),
+                    {
+                      id: json.messageId,
+                      role: "assistant" as const,
+                      content: fullContent,
+                      created_at: new Date().toISOString(),
+                    },
+                  ];
+                });
+                setTotalMessageCount((c) => c + 1);
+                requestAnimationFrame(() => scrollToBottom("auto"));
               }
             } catch {
               // Skip malformed JSON
@@ -352,7 +456,7 @@ export default function ChatPage() {
 
   return (
     <>
-    <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3"
+    <div className="flex flex-col h-dvh max-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3"
 style={{
           transform: `translateX(${Math.min(swipeX > 0 ? swipeX : 0, 180)}px)`,
           transition: swipeX === 0 ? "transform 0.3s ease" : "none",
@@ -417,9 +521,26 @@ style={{
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+      <div
+        ref={messagesScrollRef}
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3"
+      >
+        {(hasMoreMessages || loadingOlderMessages) && (
+          <div className="py-1 text-center text-[11px] text-[#aeaeb2]">
+            {loadingOlderMessages
+              ? "加载更早的消息…"
+              : totalMessageCount > messages.length
+                ? `还有 ${totalMessageCount - messages.length} 条，继续上滑加载`
+                : "继续上滑加载更早消息"}
+          </div>
+        )}
+        {messages.map((msg, index) => (
+          <div key={msg.id}>
+            {hasMoreMessages && index === preloadAnchorIndex && (
+              <div ref={preloadAnchorRef} className="h-px w-full" aria-hidden />
+            )}
+            <MessageBubble message={msg} />
+          </div>
         ))}
         {streamReasoning && (
           <div className="self-start max-w-[85%] w-full">
