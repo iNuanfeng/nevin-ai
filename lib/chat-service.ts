@@ -3,10 +3,15 @@ import { analyzeUploadedImages } from "@/lib/image-service";
 import { buildImageContextBlock, parseMessageImages, type ImageAttachment } from "@/lib/image-utils";
 import { formatWebSearchForPrompt, searchWeb } from "@/lib/web-search";
 import { getServerDateTimeContext, isDateTimeQuery } from "@/lib/datetime-context";
-import { getProfile, appendCollectedInfo } from "@/lib/profile-service";
-import { getMentorById, Mentor } from "@/lib/mentor-service";
-import { getPersonsByConversation } from "@/lib/person-service";
+import { getProfile } from "@/lib/profile-service";
+import { queueCollectedInfo, scheduleCollectedInfoConsolidation } from "@/lib/collected-info-service";
+import {
+  queuePersonCollectedInfo,
+  schedulePersonCollectedInfoConsolidation,
+} from "@/lib/person-collected-info-service";
 import { retrieveRelevant, storeMemory, buildRefinePrompt, parseRefinedMemories } from "@/lib/memory-service";
+import { getMentorById, type Mentor } from "@/lib/mentor-service";
+import { getPersonsByConversation, type Person } from "@/lib/person-service";
 import {
   getConversationById,
   getMessagesPage,
@@ -58,7 +63,16 @@ function buildSystemPrompt(
     collected_info: string | null;
   },
   mentor: Mentor,
-  persons: Array<{ name: string; relationship: string | null; background: string | null; personality_notes: string | null; relationship_dynamics: string | null; recent_status: string | null; strategy_notes: string | null }>,
+  persons: Array<{
+    name: string;
+    relationship: string | null;
+    background: string | null;
+    personality_notes: string | null;
+    relationship_dynamics: string | null;
+    recent_status: string | null;
+    strategy_notes: string | null;
+    collected_info: string | null;
+  }>,
   memories: Array<{ content: string; importance: number; category: string | null }>
 ): string {
   const lines: string[] = [];
@@ -93,6 +107,9 @@ function buildSystemPrompt(
       if (p.relationship_dynamics) lines.push(`关系动态：${p.relationship_dynamics}`);
       if (p.recent_status) lines.push(`最近动态：${p.recent_status}`);
       if (p.strategy_notes) lines.push(`相处策略：${p.strategy_notes}`);
+      if (p.collected_info) {
+        lines.push(`信息收集（对话积累）：${p.collected_info}`);
+      }
     }
   }
 
@@ -128,6 +145,56 @@ function formatMessageForAI(message: Message): ChatMessage {
     }
   }
   return { role, content };
+}
+
+const PERSON_CONTACT_CATEGORIES = new Set([
+  "person_info",
+  "relationship",
+  "insight",
+  "event",
+  "goal",
+]);
+
+function resolveTargetPersonIds(
+  item: { category?: string; entities?: number[] },
+  conversationPersonIds: number[]
+): number[] {
+  const fromEntities = (item.entities ?? []).filter((id) => conversationPersonIds.includes(id));
+  if (fromEntities.length > 0) return fromEntities;
+  const category = item.category ?? "insight";
+  if (category === "personal_info") return [];
+  if (conversationPersonIds.length === 1) return conversationPersonIds;
+  return [];
+}
+
+function dispatchCollectedInfo(
+  item: { content?: string; category?: string; entities?: number[] },
+  conversationPersonIds: number[]
+): void {
+  if (!item.content?.trim()) return;
+  const category = item.category ?? "insight";
+
+  if (category === "personal_info") {
+    const misassigned = (item.entities ?? []).filter((id) => conversationPersonIds.includes(id));
+    if (misassigned.length > 0) {
+      for (const pid of misassigned) {
+        const { shouldConsolidate } = queuePersonCollectedInfo(pid, item.content);
+        if (shouldConsolidate) schedulePersonCollectedInfoConsolidation(pid);
+      }
+      return;
+    }
+    const { shouldConsolidate } = queueCollectedInfo(item.content);
+    if (shouldConsolidate) scheduleCollectedInfoConsolidation();
+    return;
+  }
+
+  if (!PERSON_CONTACT_CATEGORIES.has(category)) return;
+
+  const targetIds = resolveTargetPersonIds(item, conversationPersonIds);
+  for (const pid of targetIds) {
+    const { shouldConsolidate } = queuePersonCollectedInfo(pid, item.content);
+    if (shouldConsolidate) schedulePersonCollectedInfoConsolidation(pid);
+  }
 }
 
 /**
@@ -265,7 +332,7 @@ export async function handleMessage(
           generateTitle(conversationId, recentMessages, fullContent, mentor.name);
         }
         generateSummary(conversationId, recentMessages, fullContent);
-        postProcessConversation(conversationId, mentor.id, personIds, recentMessages, fullContent, callbacks);
+        postProcessConversation(conversationId, mentor.id, persons, recentMessages, fullContent, callbacks);
       },
       onError: (error) => {
         callbacks.onError(error);
@@ -325,11 +392,12 @@ async function generateSummary(
 async function postProcessConversation(
   conversationId: number,
   mentorId: number,
-  personIds: number[],
+  persons: Person[],
   messages: Message[],
   aiResponse: string,
   callbacks: HandleMessageCallbacks
 ): Promise<void> {
+  const conversationPersonIds = persons.map((p) => p.id);
   const recentText = messages
     .slice(-6)
     .map((m) => `${m.role}: ${m.content.slice(0, 500)}`)
@@ -346,9 +414,13 @@ async function postProcessConversation(
   if (!shouldRefine) return;
 
   try {
-    const analysis = await analyze(buildRefinePrompt(conversationText), [
-      { role: "user", content: "请提炼上述对话中的长期记忆。" },
-    ]);
+    const analysis = await analyze(
+      buildRefinePrompt(
+        conversationText,
+        persons.map((p) => ({ id: p.id, name: p.name }))
+      ),
+      [{ role: "user", content: "请提炼上述对话中的长期记忆。" }]
+    );
 
     const parsed = parseRefinedMemories(analysis);
     if (parsed.length === 0) return;
@@ -364,8 +436,11 @@ async function postProcessConversation(
           entities: item.entities?.length ? item.entities : undefined,
           importance: item.importance ?? 5,
         });
-        if (item.category === "personal_info") {
-          appendCollectedInfo(item.content);
+        if (conversationPersonIds.length > 0) {
+          dispatchCollectedInfo(item, conversationPersonIds);
+        } else if (item.category === "personal_info") {
+          const { shouldConsolidate } = queueCollectedInfo(item.content);
+          if (shouldConsolidate) scheduleCollectedInfoConsolidation();
         }
         stored++;
       }

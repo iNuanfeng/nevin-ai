@@ -8,9 +8,22 @@ let db: Database.Database | null = null;
 export type { MentorSeed };
 
 function migrateDb(database: Database.Database): void {
-  const profileCols = database.prepare("PRAGMA table_info(profile)").all() as Array<{ name: string }>;
+  let profileCols = database.prepare("PRAGMA table_info(profile)").all() as Array<{ name: string }>;
   if (!profileCols.some((c) => c.name === "collected_info")) {
     database.exec("ALTER TABLE profile ADD COLUMN collected_info TEXT");
+  }
+  profileCols = database.prepare("PRAGMA table_info(profile)").all() as Array<{ name: string }>;
+  if (!profileCols.some((c) => c.name === "pending_collected_info")) {
+    database.exec("ALTER TABLE profile ADD COLUMN pending_collected_info TEXT");
+  }
+
+  let personCols = database.prepare("PRAGMA table_info(persons)").all() as Array<{ name: string }>;
+  if (!personCols.some((c) => c.name === "collected_info")) {
+    database.exec("ALTER TABLE persons ADD COLUMN collected_info TEXT");
+  }
+  personCols = database.prepare("PRAGMA table_info(persons)").all() as Array<{ name: string }>;
+  if (!personCols.some((c) => c.name === "pending_collected_info")) {
+    database.exec("ALTER TABLE persons ADD COLUMN pending_collected_info TEXT");
   }
 }
 

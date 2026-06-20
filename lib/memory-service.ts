@@ -156,22 +156,34 @@ export function refineMemoriesFromConversation(
 /**
  * 基于对话内容生成记忆提炼的 prompt（供 DeepSeek 分析用）
  */
-export function buildRefinePrompt(messagesContent: string): string {
+export function buildRefinePrompt(
+  messagesContent: string,
+  linkedPersons?: Array<{ id: number; name: string }>
+): string {
+  const personBlock =
+    linkedPersons && linkedPersons.length > 0
+      ? `\n\n本对话关联的联系人（JSON 中 entities 请使用下列 id 整数）：\n${linkedPersons
+          .map((p) => `- id ${p.id}: ${p.name}`)
+          .join("\n")}`
+      : "";
+
   return `你是一个记忆提炼助手。请分析以下对话内容，提炼出需要永久记住的关键信息。
 
 对话内容：
-${messagesContent}
+${messagesContent}${personBlock}
 
 规则：
 1. 每条记忆应是一个独立的事实陈述，不要包含对话中的问候语或闲聊
-2. 用户主动说出的个人信息（生日、姓名、职业、住址等）必须提炼为 personal_info，重要度 8-10
-3. 重要度 1-10：对用户人生影响越大的信息重要度越高
-4. 分类：personal_info（个人基本情况）/ relationship（关系动态）/ event（事件记录）/ insight（深刻洞察）/ goal（目标与计划）
-5. 只提炼客观有长期价值的信息，过滤掉一次性或临时性内容
+2. personal_info 仅用于「用户本人」（应用所有者）的客观信息（生日、职业等），entities 必须为空数组 []
+3. person_info 用于联系人的客观信息（生日、职业、性格等），entities 必须填联系人 person_id（整数）
+4. relationship 用于用户与某联系人的关系动态、互动模式，entities 必填 person_id
+5. insight / event / goal 若明确涉及某联系人，entities 填对应 person_id
+6. 重要度 1-10；只提炼有长期价值的信息
 
 请只输出 JSON 数组，不要 markdown 代码块（无有价值内容则返回 []）：
 [
-  {"content": "...", "category": "personal_info", "importance": 9, "entities": []}
+  {"content": "用户生日为6月20日", "category": "personal_info", "importance": 9, "entities": []},
+  {"content": "小红最近工作压力大", "category": "person_info", "importance": 7, "entities": [2]}
 ]`;
 }
 

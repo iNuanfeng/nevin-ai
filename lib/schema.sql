@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS profile (
     life_goals TEXT,
     habits TEXT,
     collected_info TEXT,
+    pending_collected_info TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -60,6 +61,8 @@ CREATE TABLE IF NOT EXISTS persons (
     relationship_dynamics TEXT,
     recent_status TEXT,
     strategy_notes TEXT,
+    collected_info TEXT,
+    pending_collected_info TEXT,
     archived INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP

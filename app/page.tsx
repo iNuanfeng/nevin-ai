@@ -61,7 +61,9 @@ export default function HomePage() {
   // Persons view
   const [personSearch, setPersonSearch] = useState("");
   const [showPersonForm, setShowPersonForm] = useState(false);
-  const [personForm, setPersonForm] = useState({ name: "", relationship: "", category: "", background: "" });
+  const [personForm, setPersonForm] = useState({
+    name: "", relationship: "", category: "", background: "", collected_info: "",
+  });
   const [editingPersonId, setEditingPersonId] = useState<number | null>(null);
 
   // Profile view
@@ -69,6 +71,7 @@ export default function HomePage() {
     name: "", background: "", values: "", personality: "", life_goals: "", habits: "", collected_info: "",
   });
   const [profileSaving, setProfileSaving] = useState(false);
+  const [pendingCollectedCount, setPendingCollectedCount] = useState(0);
 
   // Backup stats
   const [backupStats, setBackupStats] = useState({ conversations: 0, persons: 0, memories: 0 });
@@ -146,6 +149,12 @@ export default function HomePage() {
           habits: data.profile.habits || "",
           collected_info: data.profile.collected_info || "",
         });
+        try {
+          const pending = JSON.parse(data.profile.pending_collected_info || "[]");
+          setPendingCollectedCount(Array.isArray(pending) ? pending.length : 0);
+        } catch {
+          setPendingCollectedCount(0);
+        }
       }
     } catch {}
   }, []);
@@ -177,7 +186,8 @@ export default function HomePage() {
   useEffect(() => {
     if (activeTab === "home") fetchConversations();
     if (activeTab === "backup") fetchBackupStats();
-  }, [activeTab, filterCategory, fetchConversations, fetchBackupStats]);
+    if (activeTab === "profile") fetchProfile();
+  }, [activeTab, filterCategory, fetchConversations, fetchBackupStats, fetchProfile]);
 
   // Register service worker
   useEffect(() => {
@@ -280,7 +290,7 @@ export default function HomePage() {
       }
       setShowPersonForm(false);
       setEditingPersonId(null);
-      setPersonForm({ name: "", relationship: "", category: "", background: "" });
+      setPersonForm({ name: "", relationship: "", category: "", background: "", collected_info: "" });
       fetchPersons();
       showToast(editingPersonId ? "联系人已更新" : "联系人已添加");
     } catch {
@@ -294,6 +304,7 @@ export default function HomePage() {
       relationship: p.relationship || "",
       category: p.category || "",
       background: p.background || "",
+      collected_info: p.collected_info || "",
     });
     setEditingPersonId(p.id);
     setShowPersonForm(true);
@@ -314,6 +325,7 @@ export default function HomePage() {
         body: JSON.stringify(profileForm),
       });
       showToast("档案已更新");
+      fetchProfile();
     } catch {
       showToast("保存失败");
     }
@@ -513,7 +525,7 @@ export default function HomePage() {
 
           {!showArchived && (
             <button
-              onClick={() => { setEditingPersonId(null); setPersonForm({ name: "", relationship: "", category: "", background: "" }); setShowPersonForm(true); }}
+              onClick={() => { setEditingPersonId(null); setPersonForm({ name: "", relationship: "", category: "", background: "", collected_info: "" }); setShowPersonForm(true); }}
               className="fixed bottom-[88px] right-[26px] w-12 h-12 rounded-full bg-[#007aff] text-white flex items-center justify-center shadow-lg border-none cursor-pointer z-10"
             >
               <Plus size={24} />
@@ -546,7 +558,14 @@ export default function HomePage() {
                   </div>
                   <div>
                     <label className="text-[12px] font-semibold text-[#8e8e93] uppercase mb-1.5 block">背景描述</label>
-                    <textarea value={personForm.background} onChange={e => setPersonForm({ ...personForm, background: e.target.value })} className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8ed] text-sm outline-none focus:border-[#007aff] resize-vertical min-h-[60px]" placeholder="可选" />
+                    <textarea value={personForm.background} onChange={e => setPersonForm({ ...personForm, background: e.target.value })} className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8ed] text-sm outline-none focus:border-[#007aff] resize-vertical min-h-[60px]" placeholder="可选，稳定摘要：怎么认识的、基本关系" />
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-[#8e8e93] uppercase mb-1 block">信息收集</label>
+                    <p className="text-[11px] text-[#aeaeb2] mb-1.5 leading-snug">
+                      对话中关联该联系人后，AI 提炼的内容满 10 条会自动合并到此栏；也可手动编辑。
+                    </p>
+                    <textarea value={personForm.collected_info} onChange={e => setPersonForm({ ...personForm, collected_info: e.target.value })} className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8ed] text-sm outline-none focus:border-[#007aff] resize-vertical min-h-[80px]" placeholder="关于 TA 的积累信息…" />
                   </div>
                   <button onClick={handleSavePerson} className="w-full py-3 rounded-xl bg-[#007aff] text-white text-[15px] font-semibold border-none cursor-pointer">
                     {editingPersonId ? "更新" : "添加"}
@@ -580,14 +599,21 @@ export default function HomePage() {
                 key: "collected_info",
                 label: "信息收集",
                 type: "textarea" as const,
-                hint: "AI 从对话中提炼的关于你的信息会追加到这里；你可随时查看、修改或删除。",
+                hint: "AI 从对话提炼的个人信息先进入待整理队列，满 10 条自动合并到此栏；矛盾信息会以最新为准。你可随时手动编辑。",
                 minHeight: "120px",
               },
             ].map(({ key, label, type, hint, minHeight }) => (
               <div key={key} className="mb-3">
-                <label className="text-[12px] font-semibold text-[#8e8e93] uppercase mb-1 block tracking-[.3px]">
-                  {label}
-                </label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-[.3px]">
+                    {label}
+                  </label>
+                  {key === "collected_info" && pendingCollectedCount > 0 && (
+                    <span className="text-[11px] text-[#ff9500] font-medium shrink-0">
+                      待整理 {pendingCollectedCount}/10
+                    </span>
+                  )}
+                </div>
                 {hint && (
                   <p className="text-[11px] text-[#aeaeb2] leading-snug mb-1.5">{hint}</p>
                 )}

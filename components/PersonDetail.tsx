@@ -2,6 +2,16 @@
 
 import { X, Edit3 } from "lucide-react";
 
+function pendingCount(raw: string | null | undefined): number {
+  if (!raw?.trim()) return 0;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 interface PersonDetailProps {
   person: any;
   onClose: () => void;
@@ -9,6 +19,8 @@ interface PersonDetailProps {
 }
 
 export default function PersonDetail({ person, onClose, onEdit }: PersonDetailProps) {
+  const pending = pendingCount(person.pending_collected_info);
+
   return (
     <>
       <div className="fixed inset-0 bg-black/40 z-20" onClick={onClose} />
@@ -32,6 +44,17 @@ export default function PersonDetail({ person, onClose, onEdit }: PersonDetailPr
               <div className="text-[13px] text-[#1d1d1f]">{person.background}</div>
             </div>
           )}
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <div className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider">信息收集</div>
+              {pending > 0 && (
+                <span className="text-[10px] text-[#ff9500] font-medium">待整理 {pending}/10</span>
+              )}
+            </div>
+            <div className="text-[13px] text-[#1d1d1f] whitespace-pre-wrap">
+              {person.collected_info?.trim() || "（暂无，对话中关联 TA 后 AI 会自动积累）"}
+            </div>
+          </div>
           {person.personality_notes && (
             <div>
               <div className="text-[11px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-0.5">性格判断</div>

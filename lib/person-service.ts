@@ -11,6 +11,8 @@ export interface Person {
   relationship_dynamics: string | null;
   recent_status: string | null;
   strategy_notes: string | null;
+  collected_info: string | null;
+  pending_collected_info: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +27,8 @@ export interface CreatePersonInput {
   relationship_dynamics?: string;
   recent_status?: string;
   strategy_notes?: string;
+  collected_info?: string;
+  pending_collected_info?: string;
 }
 
 /**
@@ -84,6 +88,11 @@ export function updatePerson(id: number, input: Partial<CreatePersonInput>): Per
     relationship_dynamics: input.relationship_dynamics !== undefined ? input.relationship_dynamics : existing.relationship_dynamics,
     recent_status: input.recent_status !== undefined ? input.recent_status : existing.recent_status,
     strategy_notes: input.strategy_notes !== undefined ? input.strategy_notes : existing.strategy_notes,
+    collected_info: input.collected_info !== undefined ? input.collected_info : existing.collected_info,
+    pending_collected_info:
+      input.pending_collected_info !== undefined
+        ? input.pending_collected_info
+        : existing.pending_collected_info,
   };
 
   db.prepare(`
@@ -91,7 +100,9 @@ export function updatePerson(id: number, input: Partial<CreatePersonInput>): Per
       name = @name, relationship = @relationship, category = @category,
       background = @background, personality_notes = @personality_notes,
       relationship_dynamics = @relationship_dynamics, recent_status = @recent_status,
-      strategy_notes = @strategy_notes, updated_at = CURRENT_TIMESTAMP
+      strategy_notes = @strategy_notes, collected_info = @collected_info,
+      pending_collected_info = @pending_collected_info,
+      updated_at = CURRENT_TIMESTAMP
     WHERE id = @id
   `).run({ ...merged, id });
   return getPersonById(id);
