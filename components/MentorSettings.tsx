@@ -122,7 +122,7 @@ export default function MentorSettingsView() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="app-scroll flex-1 overflow-y-auto min-h-0">
       <div className="py-2">
         {mentors.map((m) => (
           <div key={m.id}>

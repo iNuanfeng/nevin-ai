@@ -73,7 +73,7 @@ export default function ChatPage() {
   const loadingOlderRef = useRef(false);
   const hasMoreRef = useRef(false);
   const initialScrollDoneRef = useRef(false);
-  const swipeRef = useRef<{ startX: number } | null>(null);
+  const swipeRef = useRef<{ startX: number; startY: number; axis: "x" | "y" | null } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
   const imeEnterRef = useRef(false);
@@ -444,7 +444,7 @@ export default function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-dvh bg-white">
+      <div className="flex items-center justify-center h-dvh max-h-dvh overflow-hidden bg-white">
         <div className="flex gap-1">
           <span className="typing-dot" />
           <span className="typing-dot" />
@@ -456,21 +456,35 @@ export default function ChatPage() {
 
   return (
     <>
-    <div className="flex flex-col h-dvh max-h-dvh bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:my-3"
+    <div className="flex flex-col h-dvh max-h-dvh overflow-hidden bg-white w-full max-w-[430px] mx-auto sm:rounded-2xl sm:shadow-lg sm:h-[calc(100dvh-24px)] sm:max-h-[calc(100dvh-24px)] sm:my-3"
 style={{
           transform: `translateX(${Math.min(swipeX > 0 ? swipeX : 0, 180)}px)`,
           transition: swipeX === 0 ? "transform 0.3s ease" : "none",
         }}
-        onTouchStart={(e) => { swipeRef.current = { startX: e.touches[0].clientX }; setSwipeX(0); }}
+        onTouchStart={(e) => {
+          swipeRef.current = {
+            startX: e.touches[0].clientX,
+            startY: e.touches[0].clientY,
+            axis: null,
+          };
+          setSwipeX(0);
+        }}
         onTouchMove={(e) => {
           if (!swipeRef.current) return;
-          const delta = e.touches[0].clientX - swipeRef.current.startX;
-          if (delta > 0) setSwipeX(delta * 0.7);
+          const deltaX = e.touches[0].clientX - swipeRef.current.startX;
+          const deltaY = e.touches[0].clientY - swipeRef.current.startY;
+          if (!swipeRef.current.axis) {
+            if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+            swipeRef.current.axis = Math.abs(deltaX) > Math.abs(deltaY) ? "x" : "y";
+          }
+          if (swipeRef.current.axis === "x" && deltaX > 0) {
+            setSwipeX(deltaX * 0.7);
+          }
         }}
         onTouchEnd={(e) => {
           if (!swipeRef.current) return;
           const delta = e.changedTouches[0].clientX - swipeRef.current.startX;
-          if (delta > 100) router.push("/");
+          if (swipeRef.current.axis === "x" && delta > 100) router.push("/");
           else setSwipeX(0);
           swipeRef.current = null;
         }}>
@@ -523,7 +537,7 @@ style={{
       {/* Messages */}
       <div
         ref={messagesScrollRef}
-        className="flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3"
+        className="app-scroll flex-1 min-h-0 overflow-y-auto px-4 py-3 flex flex-col gap-3"
       >
         {(hasMoreMessages || loadingOlderMessages) && (
           <div className="py-1 text-center text-[11px] text-[#aeaeb2]">

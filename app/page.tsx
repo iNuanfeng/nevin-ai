@@ -354,10 +354,10 @@ export default function HomePage() {
 
   // ──── RENDER ────
   return (
-    <div className="flex flex-col min-h-dvh bg-white w-full max-w-[430px] mx-auto relative sm:rounded-2xl sm:shadow-lg sm:my-3">
+    <div className="flex flex-col h-dvh max-h-dvh overflow-hidden bg-white w-full max-w-[430px] mx-auto relative sm:rounded-2xl sm:shadow-lg sm:h-[calc(100dvh-24px)] sm:max-h-[calc(100dvh-24px)] sm:my-3">
       {/* ── HOME TAB ── */}
       {activeTab === "home" && (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <header className="flex justify-between items-center px-5 pt-3 pb-1">
             <h1 className="text-[26px] font-bold tracking-tight bg-gradient-to-r from-[#1d1d1f] to-[#555] bg-clip-text text-transparent">
               Nevin
@@ -425,7 +425,7 @@ export default function HomePage() {
 
           <MentorFilter selected={filterCategory} onChange={setFilterCategory} />
 
-          <div ref={listScrollRef} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={listScrollRef} className="app-scroll flex-1 overflow-y-auto min-h-0">
             <ConversationList
               conversations={filteredConversations}
               onDelete={handleDeleteConv}
@@ -450,12 +450,12 @@ export default function HomePage() {
             onClose={() => setShowPicker(false)}
             onSelect={handleSelectMentor}
           />
-        </>
+        </div>
       )}
 
       {/* ── PERSONS TAB ── */}
       {activeTab === "persons" && (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex justify-between items-center px-5 pt-6 pb-1">
             <h1 className="text-[26px] font-bold tracking-tight bg-gradient-to-r from-[#1d1d1f] to-[#555] bg-clip-text text-transparent">
               通讯录
@@ -480,7 +480,7 @@ export default function HomePage() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="app-scroll flex-1 overflow-y-auto min-h-0">
             {filteredPersons.map((p: any) => (
               <div key={p.id} className="flex items-center gap-3 px-5 py-3 border-b border-[#f5f5f5] active:bg-[#f8f8fa]">
                 <div
@@ -554,12 +554,12 @@ export default function HomePage() {
               </div>
             </>
           )}
-        </>
+        </div>
       )}
 
       {/* ── PROFILE TAB ── */}
       {activeTab === "profile" && (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="px-5 pt-6 pb-1">
             <h1 className="text-[26px] font-bold tracking-tight bg-gradient-to-r from-[#1d1d1f] to-[#555] bg-clip-text text-transparent">
               个人档案
@@ -567,7 +567,7 @@ export default function HomePage() {
             <p className="text-[13px] text-[#8e8e93] mt-1">这些信息将帮助 AI 更好地了解你</p>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 pt-2">
+          <div className="app-scroll flex-1 overflow-y-auto min-h-0 px-5 pt-2">
             {[
               { key: "name", label: "名字", type: "input" },
               { key: "background", label: "背景经历", type: "textarea" },
@@ -605,12 +605,12 @@ export default function HomePage() {
               {profileSaving ? "保存中…" : "保存档案"}
             </button>
           </div>
-        </>
+        </div>
       )}
 
       {/* ── MENTORS TAB ── */}
       {activeTab === "mentors" && (
-        <>
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="px-5 pt-6 pb-1">
             <h1 className="text-[26px] font-bold tracking-tight bg-gradient-to-r from-[#1d1d1f] to-[#555] bg-clip-text text-transparent">
               导师人设
@@ -618,12 +618,12 @@ export default function HomePage() {
             <p className="text-[13px] text-[#8e8e93] mt-1">定制每位导师的对话风格</p>
           </div>
           <MentorSettingsView />
-        </>
+        </div>
       )}
 
       {/* ── BACKUP TAB ── */}
       {activeTab === "backup" && (
-        <div className="px-5 pt-6 pb-2 flex-1 flex flex-col">
+        <div className="app-scroll px-5 pt-6 pb-2 flex-1 min-h-0 overflow-y-auto flex flex-col">
           <h1 className="text-[26px] font-bold tracking-tight bg-gradient-to-r from-[#1d1d1f] to-[#555] bg-clip-text text-transparent">
             数据备份
           </h1>
