@@ -20,26 +20,37 @@ export const tests = [
     },
   },
   {
-    name: "PUT /api/mentors/1 更新 style_config",
+    name: "PUT /api/mentors/1 更新 system_prompt",
     method: "PUT",
     url: "/api/mentors/1",
-    body: { style_config: { style: "测试风格", tone: "测试语气" } },
+    body: { system_prompt: "测试完整人设" },
     expect: {
       status: 200,
       body: (data: any) =>
-        data.mentor.style_config !== null &&
+        data.mentor.system_prompt === "测试完整人设" &&
         data.mentor.id === 1,
     },
   },
   {
-    name: "GET /api/mentors 确认 style_config 持久化",
+    name: "GET /api/mentors 确认 system_prompt 持久化",
     method: "GET",
     url: "/api/mentors",
     expect: {
       status: 200,
       body: (data: any) =>
-        data.mentors[0].style_config !== null &&
-        JSON.parse(data.mentors[0].style_config).style === "测试风格",
+        data.mentors[0].system_prompt === "测试完整人设",
+    },
+  },
+  {
+    name: "PUT /api/mentors/1 更新 style_config",
+    method: "PUT",
+    url: "/api/mentors/1",
+    body: { style_config: { model: "deepseek-reasoner" } },
+    expect: {
+      status: 200,
+      body: (data: any) =>
+        data.mentor.style_config !== null &&
+        JSON.parse(data.mentor.style_config).model === "deepseek-reasoner",
     },
   },
   {
@@ -50,10 +61,17 @@ export const tests = [
     expect: { status: 404 },
   },
   {
-    name: "PUT /api/mentors/1 缺少 style_config 返回 400",
+    name: "PUT /api/mentors/1 缺少更新字段返回 400",
     method: "PUT",
     url: "/api/mentors/1",
     body: {},
+    expect: { status: 400 },
+  },
+  {
+    name: "PUT /api/mentors/1 空 system_prompt 返回 400",
+    method: "PUT",
+    url: "/api/mentors/1",
+    body: { system_prompt: "   " },
     expect: { status: 400 },
   },
 ];

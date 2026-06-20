@@ -59,19 +59,6 @@ function buildSystemPrompt(
   lines.push(`你是一个${mentor.title}，名叫${mentor.name}。`);
   lines.push(mentor.system_prompt);
 
-  if (mentor.style_config) {
-    try {
-      const style = JSON.parse(mentor.style_config);
-      lines.push("");
-      lines.push("【你的风格要求】");
-      if (style.style) lines.push(style.style);
-      if (style.tone) lines.push(`语气：${style.tone}`);
-      if (style.rules?.length) lines.push(...style.rules.map((r: string) => `- ${r}`));
-    } catch {
-      lines.push(`\n【风格定制】${mentor.style_config}`);
-    }
-  }
-
   // 用户档案
   lines.push("");
   lines.push("【关于用户】");
