@@ -65,6 +65,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const swipeRef = useRef<{ startX: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
+  const imeEnterRef = useRef(false);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -315,8 +317,22 @@ export default function ChatPage() {
   };
 
   // ── Handle Enter key ──
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
+    // 部分输入法按 Enter 确认选词时，keydown 会在 compositionend 之后触发
+    imeEnterRef.current = true;
+    setTimeout(() => {
+      imeEnterRef.current = false;
+    }, 0);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      if (e.nativeEvent.isComposing || isComposingRef.current || imeEnterRef.current) return;
       e.preventDefault();
       handleSend();
     }
@@ -496,6 +512,8 @@ style={{
           ref={textareaRef}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
+          onCompositionStart={handleCompositionStart}
+          onCompositionEnd={handleCompositionEnd}
           onKeyDown={handleKeyDown}
           placeholder={uploadingImage ? "图片上传中…" : "输入消息…"}
           rows={1}
