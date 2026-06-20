@@ -6,24 +6,11 @@ import { ArrowLeft, Plus, Send, Image as ImageIcon, MoreHorizontal, Brain, Globe
 import MessageBubble, { TypingIndicator, type MessageData } from "@/components/MessageBubble";
 import PersonSelector, { type PersonOption } from "@/components/PersonSelector";
 import { MESSAGE_PRELOAD_REMAINING } from "@/lib/chat-constants";
+import { MENTOR_GRADIENTS, CATEGORY_ICONS } from "@/lib/mentor-ui";
 import ImageThumbStrip from "@/components/ImageThumbStrip";
 
 const ENABLE_IMAGE_UPLOAD = false;
 const ENABLE_WEB_SEARCH = false;
-
-const MENTOR_GRADIENTS: Record<string, string> = {
-  life_manager: "linear-gradient(135deg,#667eea,#764ba2)",
-  workplace: "linear-gradient(135deg,#f093fb,#f5576c)",
-  romance: "linear-gradient(135deg,#ff9a9e,#fad0c4)",
-  family: "linear-gradient(135deg,#a8edea,#fed6e3)",
-  photography: "linear-gradient(135deg,#ffecd2,#fcb69f)",
-  growth: "linear-gradient(135deg,#89f7fe,#66a6ff)",
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  life_manager: "⭐", workplace: "💼", romance: "❤️",
-  family: "👨‍👩‍👧", photography: "📷", growth: "🌱",
-};
 
 function mentorPrefersReasoner(mentor: { style_config?: string | null } | null): boolean {
   if (!mentor?.style_config) return false;

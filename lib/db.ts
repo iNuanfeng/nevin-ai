@@ -7,6 +7,13 @@ let db: Database.Database | null = null;
 
 export type { MentorSeed };
 
+function migrateDb(database: Database.Database): void {
+  const profileCols = database.prepare("PRAGMA table_info(profile)").all() as Array<{ name: string }>;
+  if (!profileCols.some((c) => c.name === "collected_info")) {
+    database.exec("ALTER TABLE profile ADD COLUMN collected_info TEXT");
+  }
+}
+
 export function getDb(): Database.Database {
   if (db) return db;
 
@@ -24,6 +31,7 @@ export function getDb(): Database.Database {
   const schemaPath = path.join(process.cwd(), "lib", "schema.sql");
   const schema = fs.readFileSync(schemaPath, "utf-8");
   db.exec(schema);
+  migrateDb(db);
 
   const count = db.prepare("SELECT COUNT(*) AS c FROM mentors").get() as { c: number };
   if (count.c === 0) {

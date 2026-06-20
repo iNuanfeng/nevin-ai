@@ -2,6 +2,8 @@
 
 import { X } from "lucide-react";
 
+import { MENTOR_GRADIENTS, CATEGORY_ICONS } from "@/lib/mentor-ui";
+
 export interface MentorOption {
   id: number;
   name: string;
@@ -9,24 +11,6 @@ export interface MentorOption {
   description: string;
   category: string;
 }
-
-const MENTOR_GRADIENTS: Record<string, string> = {
-  life_manager: "linear-gradient(135deg,#667eea,#764ba2)",
-  workplace: "linear-gradient(135deg,#f093fb,#f5576c)",
-  romance: "linear-gradient(135deg,#ff9a9e,#fad0c4)",
-  family: "linear-gradient(135deg,#a8edea,#fed6e3)",
-  photography: "linear-gradient(135deg,#ffecd2,#fcb69f)",
-  growth: "linear-gradient(135deg,#89f7fe,#66a6ff)",
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  life_manager: "⭐",
-  workplace: "💼",
-  romance: "❤️",
-  family: "👨‍👩‍👧",
-  photography: "📷",
-  growth: "🌱",
-};
 
 export default function MentorPicker({
   mentors,

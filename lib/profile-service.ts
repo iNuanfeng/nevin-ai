@@ -8,6 +8,7 @@ export interface Profile {
   personality: string | null;
   life_goals: string | null;
   habits: string | null;
+  collected_info: string | null;
   updated_at: string;
 }
 
@@ -18,6 +19,7 @@ export interface UpdateProfileInput {
   personality?: string;
   life_goals?: string;
   habits?: string;
+  collected_info?: string;
 }
 
 /**
@@ -56,4 +58,24 @@ export function updateProfile(input: UpdateProfileInput): Profile {
 
   db.prepare(`UPDATE profile SET ${sets.join(", ")} WHERE id = @id`).run(params);
   return getProfile();
+}
+
+/**
+ * 将 AI 提炼的一条个人信息追加到 collected_info（去重，不覆盖已有手动内容）
+ */
+export function appendCollectedInfo(fact: string): Profile {
+  const trimmed = fact.trim();
+  if (!trimmed) return getProfile();
+
+  const profile = getProfile();
+  const existing = profile.collected_info?.trim() || "";
+  if (!existing) return updateProfile({ collected_info: trimmed });
+
+  const lines = existing.split("\n").map((l) => l.trim()).filter(Boolean);
+  const isDuplicate = lines.some(
+    (line) => line === trimmed || line.includes(trimmed) || trimmed.includes(line)
+  );
+  if (isDuplicate) return profile;
+
+  return updateProfile({ collected_info: `${existing}\n${trimmed}` });
 }

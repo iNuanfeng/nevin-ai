@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS profile (
     personality TEXT,
     life_goals TEXT,
     habits TEXT,
+    collected_info TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

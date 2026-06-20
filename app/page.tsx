@@ -66,7 +66,7 @@ export default function HomePage() {
 
   // Profile view
   const [profileForm, setProfileForm] = useState({
-    name: "", background: "", values: "", personality: "", life_goals: "", habits: "",
+    name: "", background: "", values: "", personality: "", life_goals: "", habits: "", collected_info: "",
   });
   const [profileSaving, setProfileSaving] = useState(false);
 
@@ -144,6 +144,7 @@ export default function HomePage() {
           personality: data.profile.personality || "",
           life_goals: data.profile.life_goals || "",
           habits: data.profile.habits || "",
+          collected_info: data.profile.collected_info || "",
         });
       }
     } catch {}
@@ -569,30 +570,41 @@ export default function HomePage() {
 
           <div className="app-scroll flex-1 overflow-y-auto min-h-0 px-5 pt-2">
             {[
-              { key: "name", label: "名字", type: "input" },
-              { key: "background", label: "背景经历", type: "textarea" },
-              { key: "values", label: "核心价值观", type: "textarea" },
-              { key: "personality", label: "性格特质", type: "textarea" },
-              { key: "life_goals", label: "人生目标", type: "textarea" },
-              { key: "habits", label: "生活习惯", type: "textarea" },
-            ].map(({ key, label, type }) => (
+              { key: "name", label: "名字", type: "input" as const },
+              { key: "background", label: "背景经历", type: "textarea" as const },
+              { key: "values", label: "核心价值观", type: "textarea" as const },
+              { key: "personality", label: "性格特质", type: "textarea" as const },
+              { key: "life_goals", label: "人生目标", type: "textarea" as const },
+              { key: "habits", label: "生活习惯", type: "textarea" as const },
+              {
+                key: "collected_info",
+                label: "信息收集",
+                type: "textarea" as const,
+                hint: "AI 从对话中提炼的关于你的信息会追加到这里；你可随时查看、修改或删除。",
+                minHeight: "120px",
+              },
+            ].map(({ key, label, type, hint, minHeight }) => (
               <div key={key} className="mb-3">
                 <label className="text-[12px] font-semibold text-[#8e8e93] uppercase mb-1 block tracking-[.3px]">
                   {label}
                 </label>
+                {hint && (
+                  <p className="text-[11px] text-[#aeaeb2] leading-snug mb-1.5">{hint}</p>
+                )}
                 {type === "input" ? (
                   <input
-                    value={(profileForm as any)[key]}
+                    value={(profileForm as Record<string, string>)[key]}
                     onChange={(e) => setProfileForm({ ...profileForm, [key]: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8ed] text-sm outline-none focus:border-[#007aff] bg-white"
                     placeholder={label}
                   />
                 ) : (
                   <textarea
-                    value={(profileForm as any)[key]}
+                    value={(profileForm as Record<string, string>)[key]}
                     onChange={(e) => setProfileForm({ ...profileForm, [key]: e.target.value })}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8ed] text-sm outline-none focus:border-[#007aff] bg-white resize-vertical min-h-[60px]"
-                    placeholder={`你的${label}…`}
+                    style={minHeight ? { minHeight } : undefined}
+                    placeholder={key === "collected_info" ? "例如：生日 6 月 20 日；在上海工作…" : `你的${label}…`}
                   />
                 )}
               </div>

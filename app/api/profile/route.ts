@@ -18,7 +18,7 @@ export async function GET() {
 
 /**
  * PUT /api/profile — 更新用户档案
- * 请求体：{ name?, background?, values?, personality?, life_goals?, habits? }
+ * 请求体：{ name?, background?, values?, personality?, life_goals?, habits?, collected_info? }
  */
 export async function PUT(req: NextRequest) {
   try {

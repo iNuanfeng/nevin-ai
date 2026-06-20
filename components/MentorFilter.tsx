@@ -1,5 +1,7 @@
 "use client";
 
+import { MENTOR_FILTER_LABELS } from "@/lib/mentor-ui";
+
 export interface MentorChip {
   id: number;
   name: string;
@@ -9,12 +11,7 @@ export interface MentorChip {
 
 const CATEGORY_EMOJIS: Record<string, string> = {
   all: "全部",
-  life_manager: "⭐ 总管家",
-  workplace: "💼 职场军师",
-  romance: "❤️ 情场顾问",
-  family: "👨‍👩‍👧 家庭调解师",
-  photography: "📷 摄影导师",
-  growth: "🌱 成长教练",
+  ...MENTOR_FILTER_LABELS,
 };
 
 export default function MentorFilter({

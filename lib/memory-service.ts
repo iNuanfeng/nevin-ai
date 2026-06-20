@@ -159,15 +159,41 @@ export function refineMemoriesFromConversation(
 export function buildRefinePrompt(messagesContent: string): string {
   return `你是一个记忆提炼助手。请分析以下对话内容，提炼出需要永久记住的关键信息。
 
+对话内容：
+${messagesContent}
+
 规则：
 1. 每条记忆应是一个独立的事实陈述，不要包含对话中的问候语或闲聊
-2. 重要度 1-10：对用户人生影响越大的信息重要度越高
-3. 分类：personal_info（个人基本情况）/ relationship（关系动态）/ event（事件记录）/ insight（深刻洞察）/ goal（目标与计划）
-4. 只提炼客观有长期价值的信息，过滤掉一次性或临时性内容
+2. 用户主动说出的个人信息（生日、姓名、职业、住址等）必须提炼为 personal_info，重要度 8-10
+3. 重要度 1-10：对用户人生影响越大的信息重要度越高
+4. 分类：personal_info（个人基本情况）/ relationship（关系动态）/ event（事件记录）/ insight（深刻洞察）/ goal（目标与计划）
+5. 只提炼客观有长期价值的信息，过滤掉一次性或临时性内容
 
-请按以下 JSON 格式返回（如果无有价值内容返回空数组）：
+请只输出 JSON 数组，不要 markdown 代码块（无有价值内容则返回 []）：
 [
-  {"content": "...", "category": "insight", "importance": 7, "entities": []},
-  {"content": "...", "category": "relationship", "importance": 8, "entities": [person_id]}
+  {"content": "...", "category": "personal_info", "importance": 9, "entities": []}
 ]`;
+}
+
+/** 从模型输出中解析记忆 JSON 数组 */
+export function parseRefinedMemories(analysis: string): Array<{
+  content?: string;
+  category?: string;
+  importance?: number;
+  entities?: number[];
+}> {
+  const trimmed = analysis.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    const match = trimmed.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    try {
+      const parsed = JSON.parse(match[0]);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
 }

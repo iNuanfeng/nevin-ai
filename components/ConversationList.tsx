@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { parseDbDateTime } from "@/lib/datetime-context";
+import { MENTOR_GRADIENTS, CATEGORY_ICONS } from "@/lib/mentor-ui";
 
 export interface ConversationItemData {
   id: number;
@@ -18,24 +19,6 @@ export interface ConversationItemData {
   last_message_at: string | null;
   created_at: string;
 }
-
-const MENTOR_GRADIENTS: Record<string, string> = {
-  life_manager: "linear-gradient(135deg,#667eea,#764ba2)",
-  workplace: "linear-gradient(135deg,#f093fb,#f5576c)",
-  romance: "linear-gradient(135deg,#ff9a9e,#fad0c4)",
-  family: "linear-gradient(135deg,#a8edea,#fed6e3)",
-  photography: "linear-gradient(135deg,#ffecd2,#fcb69f)",
-  growth: "linear-gradient(135deg,#89f7fe,#66a6ff)",
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  life_manager: "⭐",
-  workplace: "💼",
-  romance: "❤️",
-  family: "👨‍👩‍👧",
-  photography: "📷",
-  growth: "🌱",
-};
 
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return "";

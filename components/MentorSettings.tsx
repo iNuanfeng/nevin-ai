@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Brain, ChevronRight, RotateCcw } from "lucide-react";
 import type { MentorStyleConfig } from "@/lib/mentor-service";
 import { getDefaultSystemPrompt, getDefaultStyleConfig } from "@/lib/mentor-defaults";
+import { MENTOR_GRADIENTS, CATEGORY_ICONS } from "@/lib/mentor-ui";
 
 interface Mentor {
   id: number;
@@ -15,20 +16,6 @@ interface Mentor {
   category: string;
   sort_order: number;
 }
-
-const MENTOR_GRADIENTS: Record<string, string> = {
-  life_manager: "linear-gradient(135deg,#667eea,#764ba2)",
-  workplace: "linear-gradient(135deg,#f093fb,#f5576c)",
-  romance: "linear-gradient(135deg,#ff9a9e,#fad0c4)",
-  family: "linear-gradient(135deg,#a8edea,#fed6e3)",
-  photography: "linear-gradient(135deg,#ffecd2,#fcb69f)",
-  growth: "linear-gradient(135deg,#89f7fe,#66a6ff)",
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  life_manager: "⭐", workplace: "💼", romance: "❤️",
-  family: "👨‍👩‍👧", photography: "📷", growth: "🌱",
-};
 
 function parseStyleConfig(style_config: string | null): MentorStyleConfig {
   if (!style_config) return {};

@@ -3,10 +3,10 @@ import { analyzeUploadedImages } from "@/lib/image-service";
 import { buildImageContextBlock, parseMessageImages, type ImageAttachment } from "@/lib/image-utils";
 import { formatWebSearchForPrompt, searchWeb } from "@/lib/web-search";
 import { getServerDateTimeContext, isDateTimeQuery } from "@/lib/datetime-context";
-import { getProfile, updateProfile } from "@/lib/profile-service";
+import { getProfile, appendCollectedInfo } from "@/lib/profile-service";
 import { getMentorById, Mentor } from "@/lib/mentor-service";
-import { getPersonsByConversation, appendPersonInsight } from "@/lib/person-service";
-import { retrieveRelevant, storeMemory, buildRefinePrompt } from "@/lib/memory-service";
+import { getPersonsByConversation } from "@/lib/person-service";
+import { retrieveRelevant, storeMemory, buildRefinePrompt, parseRefinedMemories } from "@/lib/memory-service";
 import {
   getConversationById,
   getMessagesPage,
@@ -48,7 +48,15 @@ const MAX_CONTEXT_MESSAGES = 20;
  * 包含：用户档案 + 导师提示词 + 人设定制 + 联系人档案 + 历史记忆
  */
 function buildSystemPrompt(
-  profile: { name: string | null; background: string | null; values: string | null; personality: string | null; life_goals: string | null; habits: string | null },
+  profile: {
+    name: string | null;
+    background: string | null;
+    values: string | null;
+    personality: string | null;
+    life_goals: string | null;
+    habits: string | null;
+    collected_info: string | null;
+  },
   mentor: Mentor,
   persons: Array<{ name: string; relationship: string | null; background: string | null; personality_notes: string | null; relationship_dynamics: string | null; recent_status: string | null; strategy_notes: string | null }>,
   memories: Array<{ content: string; importance: number; category: string | null }>
@@ -68,6 +76,11 @@ function buildSystemPrompt(
   if (profile.personality) lines.push(`性格：${profile.personality}`);
   if (profile.life_goals) lines.push(`当前目标：${profile.life_goals}`);
   if (profile.habits) lines.push(`习惯：${profile.habits}`);
+  if (profile.collected_info) {
+    lines.push("");
+    lines.push("信息收集（对话中积累的关于你的事实，含手动整理）：");
+    lines.push(profile.collected_info);
+  }
 
   // 联系人档案
   if (persons.length > 0) {
@@ -162,12 +175,17 @@ export async function handleMessage(
     const persons = getPersonsByConversation(conversationId);
     const personIds = persons.map((p) => p.id);
 
-    // 4. 检索记忆
+    // 4. 检索记忆（跨导师共享，不按 mentor_id 过滤）
     const memoryQuery = [content, ...analyzedImages.map((img) => img.ocrText)].filter(Boolean).join("\n");
-    const memories = retrieveRelevant(memoryQuery || content, {
-      mentorId: mentor.id,
-      limit: 10,
-    });
+    let memories = retrieveRelevant(memoryQuery || content, { limit: 10 });
+    if (/生日|出生|几号生|什么时候生/.test(content)) {
+      const birthdayMemories = retrieveRelevant("生日", { limit: 5 });
+      const seen = new Set(memories.map((m) => m.id));
+      for (const m of birthdayMemories) {
+        if (!seen.has(m.id)) memories.push(m);
+      }
+      memories = memories.slice(0, 10);
+    }
 
     // 5. 获取最近上下文消息
     const recentMessages = getMessagesPage(conversationId, { limit: MAX_CONTEXT_MESSAGES }).items;
@@ -312,52 +330,48 @@ async function postProcessConversation(
   aiResponse: string,
   callbacks: HandleMessageCallbacks
 ): Promise<void> {
-  // 记忆提炼
-  if (aiResponse.length > 50) {
-    try {
-      const recentText = messages
-        .slice(-4)
-        .map((m) => `${m.role}: ${m.content.slice(0, 500)}`)
-        .join("\n");
+  const recentText = messages
+    .slice(-6)
+    .map((m) => `${m.role}: ${m.content.slice(0, 500)}`)
+    .join("\n");
+  const conversationText = recentText
+    ? `${recentText}\nassistant: ${aiResponse.slice(0, 1000)}`
+    : `assistant: ${aiResponse.slice(0, 1000)}`;
 
-      const refinePrompt = buildRefinePrompt(recentText);
-      const analysis = await analyze(refinePrompt, [
-        { role: "user", content: `AI 的回复：${aiResponse.slice(0, 1000)}` },
-      ]);
+  const userTurn = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
+  const shouldRefine =
+    conversationText.trim().length > 15 &&
+    (aiResponse.length > 15 || /生日|出生|名字|我叫|我姓|年龄|工作|住在|电话|邮箱/.test(userTurn));
 
-      // 解析 JSON 并存储记忆
-      try {
-        const parsed = JSON.parse(analysis);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          let stored = 0;
-          for (const item of parsed) {
-            if (item.content) {
-              storeMemory({
-                source_conversation_id: conversationId,
-                mentor_id: mentorId,
-                content: item.content,
-                category: item.category ?? "insight",
-                entities: item.entities?.length ? item.entities : undefined,
-                importance: item.importance ?? 5,
-              });
-              stored++;
-            }
-          }
-          callbacks.onMemoryStored?.(stored);
+  if (!shouldRefine) return;
+
+  try {
+    const analysis = await analyze(buildRefinePrompt(conversationText), [
+      { role: "user", content: "请提炼上述对话中的长期记忆。" },
+    ]);
+
+    const parsed = parseRefinedMemories(analysis);
+    if (parsed.length === 0) return;
+
+    let stored = 0;
+    for (const item of parsed) {
+      if (item.content) {
+        storeMemory({
+          source_conversation_id: conversationId,
+          mentor_id: mentorId,
+          content: item.content,
+          category: item.category ?? "insight",
+          entities: item.entities?.length ? item.entities : undefined,
+          importance: item.importance ?? 5,
+        });
+        if (item.category === "personal_info") {
+          appendCollectedInfo(item.content);
         }
-      } catch {
-        // JSON 解析失败 — 非结构化的提炼结果，静默丢弃
+        stored++;
       }
-    } catch {
-      // API 调用失败 — 不影响主流程
     }
+    callbacks.onMemoryStored?.(stored);
+  } catch {
+    // API 调用失败 — 不影响主流程
   }
-
-  // 联系人档案丰富（简化版：将 AI 回复中含有联系人名的分析追加到档案）
-  // 完整版需要调 DeepSeek 做专门分析，MVP 阶段简化处理
-  /*
-  for (const personId of personIds) {
-    // placeholder for enrichProfile
-  }
-  */
 }
